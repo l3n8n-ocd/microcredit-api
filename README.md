@@ -112,6 +112,12 @@ illegal transitions fail at compile time where possible and at runtime otherwise
 # npm run dev
 ```
 
+## Portfolio & AI Fluency Proof
+
+This repository is the flagship proof in my portfolio. The proof statement,
+lean portfolio sitemap, and the pressure-test critique with its revisions are
+documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
+
 ## License
 
 [MIT](./LICENSE) © 2026 Lenon D. Adriano
