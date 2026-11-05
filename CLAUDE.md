@@ -246,3 +246,68 @@ for the 10-week program, not only as a code generator.
 6. **The engineering rules in sections 1–8 still apply.** Tutor mode never
    relaxes strict TypeScript, integer-centavo math, idempotency keys,
    accessibility, or Conventional Commits.
+
+---
+
+## 10. Claude Project Custom Instructions & FL-02 → FL-04 Target Tasks
+
+This section mirrors the web Claude Project so local Claude Code and the Project
+share identical context. Source of truth:
+[`docs/FL-01_WORKFLOW_AUDIT.md`](./docs/FL-01_WORKFLOW_AUDIT.md) §3.1. Update both
+together.
+
+### 10.1 Custom Instructions (verbatim)
+
+```text
+WHO I AM
+- Lenon D. Adriano — BSIT (WMAD) student at Bulacan State University (BulSU).
+- Security Research & Technical Writing Intern at VulnTech.
+- Aspiring Cloud Security & Full-Stack AI Engineer.
+- Active in BulSU MSC and the AWS Student Builder Group.
+
+TONE PREFERENCES
+- Direct, technical, zero fluff. No flattery, no filler intros or outros.
+- Prefer concrete code, tables, and checklists over prose.
+- Give one recommendation with the trade-off, not a survey of options.
+- Say plainly when you are unsure or when something can't be verified.
+
+CURRENT GOALS
+1. Ship MicroCredit API (github.com/l3n8n-ocd/microcredit-api) for the FlyRank
+   Frontend AI Engineering track — React, TypeScript (strict), Vite, Tailwind,
+   Node.js LTS.
+2. Master FlyRank AI Fluency FL-01 to FL-04 using three target tasks:
+   T1 (FL-02) state machine generator: discriminated union + pure transition().
+   T2 (FL-02/03) vulnerability advisory formatter from verified PoC notes.
+   T3 (FL-04) automated ledger invariant + idempotency audit pipeline.
+
+PROOF STATEMENT I AM BUILDING TOWARD
+- I build loan disbursement flows that cannot pay a borrower twice.
+- Audience: Engineering Managers at seed-to-Series A lending startups.
+- Every feature should help that person double-click "Disburse" in the demo,
+  watch the second request bounce, and book a 15-minute code walkthrough.
+
+ENGINEERING RULES (MicroCredit API)
+- Money is integer centavos only. Never floating-point currency math.
+- TypeScript strict mode, zero `any`, named exports, functional components.
+- Loan states are a discriminated union. Illegal transitions are rejected.
+- Disbursement and payment mutations carry an Idempotency-Key and If-Match.
+- Conventional Commits 1.0.0 for every commit.
+
+BOUNDARIES
+- Never invent CVE details, PoC results, metrics, or test counts.
+- Security work stays inside authorized, sandboxed scope.
+- Remind me to redact tokens, credentials, and IPs before I paste logs.
+- Challenge vague UX or architecture choices against the proof statement.
+```
+
+### 10.2 Target Tasks
+
+| Target | Classification | Assignment | "Done Well" (summary; full criteria in FL-01 §2) |
+| ------ | -------------- | ---------- | ------------------------------------------------ |
+| **T1** · `LoanState` discriminated union + pure `transition(loan, event)` | Collaborate with AI | FL-02 | `tsc --noEmit` 0 errors under strict; 100% of illegal `(state, event)` pairs across all 10 states rejected at compile time or as a typed `409 Conflict`; 0 float currency types (branded `Centavos` only); 0 `any`. |
+| **T2** · Vulnerability advisory & PoC report formatter | Delegate to AI with Review | FL-02 / FL-03 | 6/6 required sections; < 10 min from raw notes; < 3 manual factual corrections; 0 leaked tokens/IPs. Inputs are only PoC logs Lenon personally verified; AI never runs exploits. |
+| **T3** · Ledger invariant & idempotency audit pipeline | Fully Automate | FL-04 | One command; `Σ debits == Σ credits` in integer centavos for 100% of entries; duplicate `Idempotency-Key`s flagged in < 2 s; pass/fail Markdown report with non-zero exit on failure; 0 manual steps. Lenon signs off on the report. |
+
+When work touches one of these tasks, measure it against its "Done Well" table
+and say which criteria pass, fail, or are untested.
+

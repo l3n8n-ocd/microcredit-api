@@ -121,6 +121,12 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
 - **What this repo proves:** [`docs/WHAT_ARE_YOU_PROVING.md`](./docs/WHAT_ARE_YOU_PROVING.md)
   has the sharpened proof statement, the one-line why, and the narrowing log.
 
+## 🎓 FlyRank Internship Deliverables
+
+- **FL-01 · AI Workflow Audit and Tool Setup:** [`docs/FL-01_WORKFLOW_AUDIT.md`](./docs/FL-01_WORKFLOW_AUDIT.md)
+  covers the 12-task weekly audit, the three target tasks for FL-02 → FL-04 with
+  measurable "Done Well" criteria, and the Claude Project custom instructions.
+
 ## License
 
 [MIT](./LICENSE) © 2026 Lenon D. Adriano
