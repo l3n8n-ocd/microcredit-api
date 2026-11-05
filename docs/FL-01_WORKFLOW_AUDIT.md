@@ -38,9 +38,10 @@
 exploit, a live audience, real money). Everything AI touches has a verification step I own: the
 compiler, the test runner, a spot-check against the primary source, or my review.
 
-> **Evidence note for #11:** the pre-commit hooks are not committed to *this* repository yet. They
-> arrive with the Vite/TypeScript scaffold. Until then, Conventional Commits are followed by hand (see
-> `git log`).
+> **Evidence for #11:** shipped in this repository. Every commit runs `lint-staged` (oxlint) and a
+> strict typecheck, and `commitlint` rejects messages outside the six types in `CLAUDE.md` §7
+> ([`8283a56`](https://github.com/l3n8n-ocd/microcredit-api/commit/8283a56)). GitHub Actions repeats typecheck, lint, test, and build on every push
+> ([`be34d64`](https://github.com/l3n8n-ocd/microcredit-api/commit/be34d64)).
 
 ---
 
@@ -174,14 +175,14 @@ Claude Project work from identical context.
 
 ### 3.2 Toolkit & Anthropic Academy Checklist
 
-> Status legend: ✅ done and verifiable in this repo · ⬜ to be checked off by Lenon once completed,
-> with the evidence attached.
+> Status legend: ✅ done and verified · ⬜ not done yet. Items 1–3 were verified from screenshots
+> shared during the working session; the image files still need to be added at the paths shown.
 
 | # | Item | Status | Evidence |
 | - | ---- | :----: | -------- |
-| 1 | Anthropic Academy: **AI Fluency: Framework & Foundations**, Module 1 completed | ⬜ | 📸 Completion screenshot placeholder: `docs/assets/fl-01/academy-module-1.png` |
-| 2 | Claude web **Project** created for MicroCredit API / FlyRank | ⬜ | 📸 Screenshot placeholder: `docs/assets/fl-01/claude-project.png` |
-| 3 | Custom Instructions (§3.1) pasted into the Claude Project | ⬜ | 📸 Screenshot placeholder: `docs/assets/fl-01/claude-project-instructions.png` |
+| 1 | Anthropic Academy: **AI Fluency: Framework & Foundations**, Module 1 ("Introduction to AI Fluency") completed | ✅ | Verified 2026-11-05 from a course-sidebar screenshot showing the module checked. 📸 Image to add: `docs/assets/fl-01/academy-module-1.png` |
+| 2 | Claude web **Project** created ("FlyRank AI Engineering & Fluency") | ✅ | Verified 2026-11-05 from a screenshot of the Project page. 📸 Image to add: `docs/assets/fl-01/claude-project.png` |
+| 3 | Custom Instructions (§3.1) pasted into the Claude Project | ✅ | Verified 2026-11-05 from a screenshot of the open Instructions panel; the visible text matches §3.1. 📸 Image to add: `docs/assets/fl-01/claude-project-instructions.png` |
 | 4 | Claude Code workspace context configured (`CLAUDE.md` with proof statement, engineering rules, tutor mode, and these instructions) | ✅ | [`CLAUDE.md`](../CLAUDE.md) |
 | 5 | GitHub repository with Conventional Commits history | ✅ | [`l3n8n-ocd/microcredit-api`](https://github.com/l3n8n-ocd/microcredit-api/commits/main) |
 | 6 | Three target tasks chosen with measurable "Done Well" definitions | ✅ | Section 2 of this document |
