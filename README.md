@@ -1,5 +1,7 @@
 # MicroCredit API
 
+[![CI](https://github.com/l3n8n-ocd/microcredit-api/actions/workflows/ci.yml/badge.svg)](https://github.com/l3n8n-ocd/microcredit-api/actions/workflows/ci.yml)
+
 > Alternative Credit Scoring & Micro-Lending Portal
 
 ## Problem Statement
@@ -15,13 +17,28 @@ aggressive collection practices.
 mobile load usage — and producing an explainable trust score that lenders can
 act on.
 
-## Planned Tech Stack
+## Tech Stack
 
-- React
-- TypeScript (strict mode)
-- Tailwind CSS
-- Vite
-- Node.js (LTS)
+| Layer      | Tool                                               |
+| ---------- | -------------------------------------------------- |
+| UI         | React 19 (functional components, named exports)    |
+| Language   | TypeScript 7, `strict` plus the extra flags in [`CLAUDE.md`](./CLAUDE.md#2-tech-stack) |
+| Build      | Vite 8                                             |
+| Styling    | Tailwind CSS 4 (via `@tailwindcss/vite`)           |
+| Lint       | oxlint: no `any`, no default exports, hooks rules  |
+| Tests      | Vitest 5 + jsdom + Testing Library                 |
+| Git hooks  | husky + lint-staged + commitlint (Conventional Commits) |
+| CI         | GitHub Actions: typecheck → lint → test → build    |
+| Runtime    | Node.js 22 LTS (pinned in `.nvmrc`)                |
+
+## Project Status
+
+| Area | Status |
+| ---- | ------ |
+| Toolchain, lint, tests, git hooks, CI | ✅ In place |
+| `Disburse` flow with `Idempotency-Key` + `If-Match` | ⬜ Not built yet (next priority, see [`CLAUDE.md`](./CLAUDE.md#0-proof-statement--read-first) §0) |
+| Loan state machine, ledger, credit scoring | ⬜ Designed below, not yet implemented |
+| Deployed demo | ⬜ Not deployed yet |
 
 ## Loan Lifecycle State Machine
 
@@ -103,14 +120,27 @@ illegal transitions fail at compile time where possible and at runtime otherwise
 
 ## Getting Started
 
-> 🚧 Setup instructions coming soon.
+Requires Node.js 22 LTS (`nvm use` reads `.nvmrc`).
 
 ```bash
-# git clone https://github.com/l3n8n-ocd/microcredit-api.git
-# cd microcredit-api
-# npm install
-# npm run dev
+git clone https://github.com/l3n8n-ocd/microcredit-api.git
+cd microcredit-api
+npm install
+cp .env.example .env
+npm run dev
 ```
+
+| Script              | What it does                                         |
+| ------------------- | ---------------------------------------------------- |
+| `npm run dev`       | Start the Vite dev server                            |
+| `npm run build`     | Typecheck, then build for production into `dist/`    |
+| `npm run preview`   | Serve the production build locally                   |
+| `npm run typecheck` | Run the TypeScript compiler in strict mode           |
+| `npm run lint`      | Run oxlint; warnings fail the run                    |
+| `npm test`          | Run the Vitest suite once                            |
+
+Every commit runs lint-staged and a typecheck, and commit messages must follow
+Conventional Commits (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`).
 
 ## Portfolio & AI Fluency Proof
 
