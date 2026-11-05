@@ -57,7 +57,6 @@ with 4 anchored sections and nothing else.
                   │  ├─ Alternative Credit Scoring portal      │
                   │  ├─ Loan State Machine APPLIED → SETTLED   │
                   │  └─ Double-Entry Centavo Ledger            │
-                  │  Supporting: RoadWatch · CVE-2026-111497   │
                   └───────────────────┬────────────────────────┘
                                       │ (≈15s)
                                       ▼
@@ -85,7 +84,7 @@ flowchart TD
     L([Engineering Lead / Technical Founder lands]) --> H
     H["1 · / — Hero: The Claim<br/>CTA: Inspect MicroCredit API Live / Book a 15-Min Walkthrough"]
     H -->|scroll or CTA| F
-    F["2 · /#flagship-proof — Case Study: MicroCredit API<br/>Credit Scoring · Loan State Machine APPLIED→SETTLED · Double-Entry Centavo Ledger<br/>Supporting: RoadWatch · CVE-2026-111497 research"]
+    F["2 · /#flagship-proof — Case Study: MicroCredit API<br/>Credit Scoring · Loan State Machine APPLIED→SETTLED · Double-Entry Centavo Ledger"]
     F --> A["3 · /#about — Why I Build This Way<br/>Strict TS discriminated unions · security-first · zero-fluff shipping"]
     A --> X["4 · /#act — The One Action<br/>Calendar booking · email · github.com/l3n8n-ocd/microcredit-api"]
     H -.->|fast path| X
@@ -117,7 +116,7 @@ sitemap fixes that. Only shipping does.
 | # | Section | Earns its place? | Why, specifically |
 | - | ------- | :--------------: | ----------------- |
 | 1 | `/` Hero | ✅ **Yes, needs a fix** | States the claim in the first 2 seconds. But the CTA **packs two actions into one button** ("Inspect … / Book …"), which splits the click. And a claim with no evidence next to it is just an assertion. The Lead has to scroll before seeing any proof. |
-| 2 | `/#flagship-proof` | ✅ **Yes, the only section that actually proves the claim** | Problems: (a) it describes the ledger and state machine instead of **letting the Lead operate them**, which is a text wall; (b) three sub-features plus two supporting projects is too much for ~15 seconds; (c) **RoadWatch and CVE-2026-111497 prove security skill, not the One Claim** (high-integrity workflows), so they compete with the flagship for attention. And an unlinked CVE ID is an unverified claim to a Lead. |
+| 2 | `/#flagship-proof` | ✅ **Yes, the only section that actually proves the claim** | Problems: (a) it describes the ledger and state machine instead of **letting the Lead operate them**, which is a text wall; (b) three sub-features is a lot to take in within ~15 seconds. |
 | 3 | `/#about` | ❌ **Wasted as its own section** | "Strict TS, security-first, zero-fluff" is **told, not shown**. A Lead skimming for 30 seconds will not read a philosophy section. Every point in it is better shown as a one-line annotation next to the code it describes in Section 2 (e.g., the `LoanState` union next to the state-machine demo). |
 | 4 | `/#act` | ✅ **Yes, but cleaner** | Needed. But (a) a **calendar embed** is heavy on slow networks and low-end devices, so a booking link plus a `mailto:` fallback is faster; (b) the **GitHub link here pulls the Lead away from the action**, so it belongs in Section 2, not next to "Book." |
 
@@ -134,8 +133,6 @@ sitemap fixes that. Only shipping does.
 4. **Hireability context.** The Lead's real question is "Can I hire this
    person?" Add one line in Section 4 covering role, timezone, and availability
    (full-time or contract).
-5. **Verifiable supporting proof.** RoadWatch and CVE-2026-111497 each need one
-   public link (repo, advisory, or write-up), or they should be left off.
 
 ### ✏️ Revisions Applied (v1 → v2)
 
@@ -144,8 +141,7 @@ sitemap fixes that. Only shipping does.
 | **1** | **Embed an interactive loan state-transition + double-entry ledger preview directly in the Hero, above the fold.** The Lead clicks `Disburse` and sees the state move `APPROVED → DISBURSED`, a balanced debit/credit pair post in centavos, and a **second click get blocked by the idempotency key**. | Proof comes before the scroll. The Lead believes the claim in about 5 seconds instead of reading a text wall first. |
 | 2 | **Split the Hero CTA.** The primary button is **"Book a 15-min walkthrough."** The secondary text link is "View the repo." | One button, one action. |
 | 3 | **Merge `/#about` into `/#flagship-proof`** as inline "Why it's built this way" annotations (discriminated unions, integer centavos, idempotency) next to the code receipts. | Show, don't tell. It also removes a section the Lead would skip. |
-| 4 | **Demote RoadWatch and CVE-2026-111497 to a compact "Also shipped" strip** (one line plus one link each) at the end of the case study. | Keeps the flagship focused on the One Claim. Security proof backs it up but doesn't compete with it. |
-| 5 | **Simplify `/#act`.** Use a booking link instead of an embed, add a `mailto:` fallback and a hireability line, and move the GitHub link to Section 2. | Faster on low-end devices, and nothing on the page pulls attention from the action. |
+| 4 | **Simplify `/#act`.** Use a booking link instead of an embed, add a `mailto:` fallback and a hireability line, and move the GitHub link to Section 2. | Faster on low-end devices, and nothing on the page pulls attention from the action. |
 
 **Remaining blocker (not a sitemap change):** build and deploy the interactive
 state-machine and ledger demo. Until then, the Hero preview and the claim
@@ -159,7 +155,7 @@ flowchart TD
     H["1 · / — Hero: Claim + LIVE proof above the fold<br/>Interactive state-transition + ledger preview<br/>Primary CTA: Book a 15-min walkthrough · secondary: View repo"]
     H -->|believes in ~5s| X
     H -->|wants depth| F
-    F["2 · /#flagship-proof — MicroCredit API deep dive<br/>Code receipts: transition(), centavo utils + tests, CI badge<br/>Inline 'why it's built this way' annotations<br/>Also shipped: RoadWatch · CVE-2026-111497 (linked)"]
+    F["2 · /#flagship-proof — MicroCredit API deep dive<br/>Code receipts: transition(), centavo utils + tests, CI badge<br/>Inline 'why it's built this way' annotations"]
     F --> X["3 · /#act — Book 15-min walkthrough<br/>Booking link · mailto fallback · role / timezone / availability"]
     X --> D([✅ Walkthrough booked])
 ```
