@@ -34,10 +34,12 @@ rejected.
 
 > ⚠️ **Evidence status (per `CLAUDE.md` §9.2 rule 4, "No unearned claims"):** the
 > idempotency and `If-Match` design is documented in
-> [`README.md`](../README.md#concurrency--idempotency), but the repository does not
-> yet contain the running demo, the `Disburse` flow, or tests. The statement
-> becomes fully true when that flow ships. **TODO:** build and deploy the
-> double-submit `Disburse` demo, then link it here.
+> [`README.md`](../README.md#concurrency--idempotency), and the toolchain that will
+> carry it is in place: strict TypeScript, Vite, Vitest, oxlint, git hooks, and green
+> CI ([`74c36fb`](https://github.com/l3n8n-ocd/microcredit-api/commit/74c36fb) → [`be34d64`](https://github.com/l3n8n-ocd/microcredit-api/commit/be34d64)). Not built yet: the
+> `Disburse` flow, its idempotency tests, and a deployed demo. The statement becomes
+> fully true when those ship. **TODO:** build and deploy the double-submit
+> `Disburse` demo, then link it here.
 
 This statement replaced the earlier one in
 [`PORTFOLIO_PATH.md`](./PORTFOLIO_PATH.md#proof-statement), which now mirrors it.

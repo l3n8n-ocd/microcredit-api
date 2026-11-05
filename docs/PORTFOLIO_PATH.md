@@ -150,6 +150,11 @@ sitemap fixes that. Only shipping does.
 state-machine and ledger demo. Until then, the Hero preview and the One Action
 are TODOs, not proof.
 
+> **Status update (2026-11-05):** the FE-01 toolchain now ships: strict TypeScript,
+> Vite, Tailwind, Vitest, oxlint, git hooks, and green CI
+> ([`74c36fb`](https://github.com/l3n8n-ocd/microcredit-api/commit/74c36fb) → [`be34d64`](https://github.com/l3n8n-ocd/microcredit-api/commit/be34d64)). The verdict above still
+> holds: the `Disburse` demo and its deployment are not built yet.
+
 ### Revised Sitemap (v2 — 3 Sections)
 
 ```mermaid
