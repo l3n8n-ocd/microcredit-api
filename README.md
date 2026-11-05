@@ -153,6 +153,8 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
 
 ## 🎓 FlyRank Internship Deliverables
 
+![Week 1 milestone: FE-01 toolchain, proof statement, portfolio sitemap, and FL-01 workflow audit](./docs/assets/week-01/week1-milestone.png)
+
 - **FL-01 · AI Workflow Audit and Tool Setup:** [`docs/FL-01_WORKFLOW_AUDIT.md`](./docs/FL-01_WORKFLOW_AUDIT.md)
   covers the 12-task weekly audit, the three target tasks for FL-02 → FL-04 with
   measurable "Done Well" criteria, and the Claude Project custom instructions.
