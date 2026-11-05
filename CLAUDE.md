@@ -69,6 +69,22 @@ Required `tsconfig` compiler flags: `strict`, `noImplicitAny`,
 `strictNullChecks`, `noUncheckedIndexedAccess`, `noImplicitReturns`,
 `exactOptionalPropertyTypes`.
 
+Tooling around the stack: **oxlint** (lint), **Vitest** + jsdom + Testing Library
+(tests), **husky** + lint-staged + commitlint (git hooks), GitHub Actions (CI).
+
+### Commands
+
+| Command             | Use it to                                                  |
+| ------------------- | ---------------------------------------------------------- |
+| `npm run dev`       | Start the Vite dev server                                  |
+| `npm run typecheck` | Strict-mode type check (`tsc -b`)                          |
+| `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports)|
+| `npm test`          | Run Vitest once                                            |
+| `npm run build`     | Typecheck + production build                               |
+
+**Before saying any change is done, run `typecheck`, `lint`, and `test`, and
+report the results.** CI runs the same four steps on every push and pull request.
+
 ---
 
 ## 3. Domain Architecture
