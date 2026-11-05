@@ -118,6 +118,9 @@ This repository is the flagship proof in my portfolio. The proof statement,
 lean portfolio sitemap, and the pressure-test critique with its revisions are
 documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
 
+- **What this repo proves:** [`docs/WHAT_ARE_YOU_PROVING.md`](./docs/WHAT_ARE_YOU_PROVING.md)
+  has the sharpened proof statement, the one-line why, and the narrowing log.
+
 ## License
 
 [MIT](./LICENSE) © 2026 Lenon D. Adriano

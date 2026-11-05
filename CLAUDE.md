@@ -7,6 +7,43 @@ borrowers.
 
 ---
 
+## 0. Proof Statement — Read First
+
+Every feature, doc, and UI decision in this repository must serve this exact
+claim, person, and action. If a change doesn't help the **One Person** take the
+**One Action**, challenge it before building it. Source and sharpening log:
+[`docs/WHAT_ARE_YOU_PROVING.md`](./docs/WHAT_ARE_YOU_PROVING.md).
+
+**One-Paragraph Proof Statement**
+
+> I build loan disbursement flows that cannot pay a borrower twice. In MicroCredit
+> API, every payout carries an `Idempotency-Key` and every admin action sends an
+> `If-Match` version, so a retry or two admins clicking at once gets rejected
+> instead of double-paying. I built it for Engineering Managers at seed-to-Series A
+> lending startups who cannot afford a duplicate payout. Double-click **Disburse**
+> in the demo, watch the second request bounce, then book a 15-minute code
+> walkthrough.
+
+**One-Line Why**
+
+> A CV or LinkedIn profile can list "React and TypeScript" but cannot show what
+> happens when a disbursement request fires twice, whereas MicroCredit API lets an
+> Engineering Manager trigger that exact race and watch the second payout get
+> rejected.
+
+| Element        | Target                                                                                              |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| **One Claim**  | I build loan disbursement flows that cannot pay a borrower twice.                                    |
+| **One Person** | An Engineering Manager at a seed-to-Series A lending startup who cannot afford a duplicate payout.  |
+| **One Action** | Double-click **Disburse** in the demo, watch the second request bounce, then book a 15-minute code walkthrough. |
+
+**Build priority that follows from this:** the `Disburse` flow with
+`Idempotency-Key` + `If-Match` handling, its tests, and a deployed demo come
+first. Until they exist, the statement above is a target, not a fact (see §9.2
+rule 4).
+
+---
+
 ## 1. Project Overview
 
 **MicroCredit API — Alternative Credit Scoring & Micro-Lending Portal** is a
@@ -163,26 +200,19 @@ All commits **must** follow
 
 This repository is also the workspace for Lenon D. Adriano's 10-week AI Fluency
 program. Everything built here (in `microcredit-api` and the portfolio) must serve
-the Proof Statement below. Full context lives in
+the Proof Statement in §0. Full context lives in
+[`docs/WHAT_ARE_YOU_PROVING.md`](./docs/WHAT_ARE_YOU_PROVING.md) and
 [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
 
-### 9.1 Proof Statement (verbatim)
+### 9.1 Proof Statement
 
-> I take complex, high-integrity frontend and full-stack workflows — double-entry
-> centavo ledgers, finite-state loan lifecycles (`APPLIED` → `SETTLED`), and
-> idempotent payment mutations — from rough concept to a working tool in
-> production. I build for the Engineering Lead or Technical Founder at a
-> fast-moving fintech or SaaS team who needs an engineer that ships reliable,
-> race-condition-safe interfaces, not brittle demos. My flagship proof is
-> **MicroCredit API**, an alternative credit-scoring and micro-lending portal where
-> every peso is an integer, every loan transition is enforced by a state machine,
-> and every disbursement carries an idempotency key. Inspect the live MicroCredit
-> API architecture demo and repo, then book a 15-minute technical walkthrough with
-> me.
+The canonical Proof Statement and One-Line Why live in **§0** at the top of this
+file. Use them word for word. The earlier statement in `docs/PORTFOLIO_PATH.md`
+is superseded: it fell into the "and" trap (three skills in one claim).
 
-- **One Claim:** high-integrity workflows, from rough concept to working tool in production.
-- **One Person:** Engineering Lead / Technical Founder at a fast-moving fintech or SaaS team.
-- **One Action:** inspect the live MicroCredit API demo/repo → book a 15-minute walkthrough.
+- **One Claim:** loan disbursement flows that cannot pay a borrower twice.
+- **One Person:** Engineering Manager at a seed-to-Series A lending startup.
+- **One Action:** double-click **Disburse** in the demo → book a 15-minute code walkthrough.
 
 ### 9.2 Role: 10-Week AI Fluency & Engineering Tutor
 
@@ -198,13 +228,13 @@ for the 10-week program, not only as a code generator.
    ("make it look better," "add a dashboard," "add charts"), do not just comply.
    Ask, specifically:
    - Which part of the **One Claim** does this prove?
-   - Would the **One Person** (an Engineering Lead with ~30 seconds) notice it or
+   - Would the **One Person** (an Engineering Manager with ~30 seconds) notice it or
      care about it?
    - What is the simpler alternative that proves the same thing?
    If the answer is "none," say so plainly and recommend cutting it.
 3. **Make every feature serve the One Action.** For each feature in
    `microcredit-api` or the portfolio, be able to trace a line:
-   *feature → evidence the Engineering Lead can inspect → belief in the claim →
+   *feature → evidence the Engineering Manager can inspect → belief in the claim →
    booking the 15-minute walkthrough.* Flag anything without that line as bloat.
 4. **No unearned claims.** Never write portfolio or README copy that claims
    something the code, tests, or deployment do not yet show (e.g., "in
