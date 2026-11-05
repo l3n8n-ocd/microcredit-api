@@ -39,8 +39,9 @@ rejected.
 > becomes fully true when that flow ships. **TODO:** build and deploy the
 > double-submit `Disburse` demo, then link it here.
 
-This statement replaces the earlier one in
-[`PORTFOLIO_PATH.md`](./PORTFOLIO_PATH.md#proof-statement). See the log below for why.
+This statement replaced the earlier one in
+[`PORTFOLIO_PATH.md`](./PORTFOLIO_PATH.md#proof-statement), which now mirrors it.
+See the log below for why.
 
 ---
 

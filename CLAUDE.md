@@ -207,8 +207,9 @@ the Proof Statement in §0. Full context lives in
 ### 9.1 Proof Statement
 
 The canonical Proof Statement and One-Line Why live in **§0** at the top of this
-file. Use them word for word. The earlier statement in `docs/PORTFOLIO_PATH.md`
-is superseded: it fell into the "and" trap (three skills in one claim).
+file. Use them word for word. `docs/PORTFOLIO_PATH.md` mirrors them; the earlier
+statement it held was replaced because it fell into the "and" trap (three skills
+in one claim).
 
 - **One Claim:** loan disbursement flows that cannot pay a borrower twice.
 - **One Person:** Engineering Manager at a seed-to-Series A lending startup.
