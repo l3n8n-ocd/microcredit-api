@@ -53,7 +53,7 @@ with 4 anchored sections and nothing else.
                                       ▼
                   ┌────────────────────────────────────────────┐
                   │ 2. /#flagship-proof  CASE STUDY            │
-                  │  MicroCredit API (l3n8n-ocd/microcredit-api)│
+                  │ MicroCredit API (l3n8n-ocd/microcredit-api) │
                   │  ├─ Alternative Credit Scoring portal      │
                   │  ├─ Loan State Machine APPLIED → SETTLED   │
                   │  └─ Double-Entry Centavo Ledger            │
