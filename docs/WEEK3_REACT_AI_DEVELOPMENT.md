@@ -53,8 +53,15 @@ There is no real backend, wallet or borrower data. The five businesses in
 The same steps on **Commit 1** end at step 6 with `Σ (UNBALANCED) ₱6,000.00 ₱5,999.99`: one centavo
 gone. Section 4, diff 1 shows why.
 
-**Deployment:** the [deployed demo](https://microcredit-api-beta.vercel.app) builds from `main` on
-Vercel. **TODO:** confirm the deployed build shows the workbench after this push.
+**Deployment, verified 2026-11-06:** the [deployed demo](https://microcredit-api-beta.vercel.app) builds
+from `main` on Vercel.
+- It serves `assets/index-CNnzWv_L.js`, the same content hash as a local `npm run build` of `main` at `2a52c9e`.
+- Steps 2–7 above were run in Chromium against the live URL. Focus went to the L-1044 heading.
+- After the repayment the ledger read `Σ (balanced) ₱6,000.00 ₱6,000.00`, and after the reversal
+  `Σ (balanced) ₱7,000.00 ₱7,000.00`.
+- The page did not scroll sideways at 360 px.
+- `e2e/fold.mjs`, pointed at the live URL, passed 6/6 (Simulate's bottom edge at 717 px of 740).
+- CI run #15 on `2a52c9e` passed.
 
 ---
 
