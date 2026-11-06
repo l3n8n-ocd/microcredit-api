@@ -397,3 +397,31 @@ reference implementation. A PR that breaks any rule is rejected.
    enough: an unused import passed Vitest but failed `tsc` in Round 2. A change
    to a money or concurrency invariant ships with a test in the same commit,
    and that test fails when the change is reverted (a mutation check).
+
+---
+
+## 12. Visual Constraints (Portfolio Design System)
+
+Source: [`docs/PORTFOLIO_DESIGN_SYSTEM.md`](./docs/PORTFOLIO_DESIGN_SYSTEM.md). These apply to every
+component an AI generates, in `src/` and on the portfolio site. The design frames the proof; it never
+upstages it.
+
+1. **Approved colours only.** Portfolio: the §4 tokens (`obsidian`, `card`, `line`, `field`, `ink`,
+   `muted`, `ok`, `link`, `fail`). Demo app in `src/`: the Tailwind families already in use, `slate`,
+   `emerald` (success), `rose` (409 / 422 / errors) and `amber` (Simulate / replay), plus `sky` for links
+   and `white`. No other hue family, and no raw hex such as `text-[#ff00aa]`.
+2. **Each colour keeps its one meaning.** Green only next to something that passed (`201`,
+   `Σ debits === Σ credits`), red only next to a bounce. Never colour alone (§6).
+3. **Three font families.** Portfolio: Plus Jakarta Sans (headings), Inter (body), JetBrains Mono (code,
+   headers, amounts, paths). Demo app: the system font stack, so no web fonts reach low-end Android.
+4. **No decorative clutter.** No gradients, `animate-*`, parallax, stock photos, abstract AI art or
+   illustrations in the hero. Motion is at most a 150 ms transition and respects
+   `prefers-reduced-motion`.
+5. **A new token, font or hue needs a reason in the design system doc first**, in the same commit.
+
+*Check:* this prints nothing.
+
+```bash
+grep -rnoE "\b(bg|text|border|ring|outline|fill|stroke|from|via|to|shadow|divide|accent|caret|decoration)-(red|orange|yellow|lime|green|teal|cyan|blue|indigo|violet|purple|fuchsia|pink|gray|zinc|neutral|stone)-[0-9]{2,3}\b|-\[#[0-9a-fA-F]{3,8}\]|bg-gradient|bg-linear|animate-|font-serif|font-\[" src --include=*.tsx --include=*.ts --include=*.css
+```
+

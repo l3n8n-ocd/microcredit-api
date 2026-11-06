@@ -208,6 +208,16 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **Commits:** AI first pass [`4d2e502`](https://github.com/l3n8n-ocd/microcredit-api/commit/4d2e502),
     code-review refactor [`f24c143`](https://github.com/l3n8n-ocd/microcredit-api/commit/f24c143).
     The first-pass flaws were seeded by the brief, and the doc says so.
+- **Consistency, Not Talent (and Frame, Not Upstage) · Week 3 General AI Fluency:**
+  [`docs/PORTFOLIO_DESIGN_SYSTEM.md`](./docs/PORTFOLIO_DESIGN_SYSTEM.md)
+  - **3 rules:** Plus Jakarta Sans + Inter + JetBrains Mono; 9 colour tokens with one meaning each
+    (`#10B981` only for a passed check such as `Σ debits === Σ credits`); a `max-w-4xl` column with no
+    decoration.
+  - **Framing:** the live Disburse/Simulate demo is the hero, not an image.
+  - **Image log:** what was rejected, what was chosen, and the 16/16 commit hashes checked in the Week 1
+    milestone card.
+  - **Tailwind v4 `@theme` block:** compiled against this repo, with measured WCAG contrast ratios.
+    The visual rule for AI-generated components is in [`CLAUDE.md` §12](./CLAUDE.md#12-visual-constraints-portfolio-design-system).
 
 ## License
 
