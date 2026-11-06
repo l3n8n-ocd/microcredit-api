@@ -17,7 +17,8 @@
     "lint": "oxlint --deny-warnings",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:e2e": "node e2e/fold.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",
@@ -37,6 +38,7 @@
     "jsdom": "^31.0.0",
     "lint-staged": "^17.6.0",
     "oxlint": "^1.91.0",
+    "playwright": "1.63.0",
     "tailwindcss": "^4.3.4",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",

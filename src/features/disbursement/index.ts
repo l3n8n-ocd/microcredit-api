@@ -8,6 +8,6 @@ export {
 } from './disbursementServer.ts'
 export { accountBalance, buildDisbursementJournal, journalTotals } from './ledger.ts'
 export { LEGAL_TRANSITIONS, transitionLoan } from './loanStateMachine.ts'
-export { SEED_LOANS } from './seedLoans.ts'
+export { SAMPLE_PAYOUT, SEED_LOANS } from './seedLoans.ts'
 export { validateDisbursement } from './validation.ts'
 export type * from './types.ts'

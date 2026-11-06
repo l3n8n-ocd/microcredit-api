@@ -20,6 +20,8 @@ export interface DisbursementFormProps {
   readonly server: DisbursementServer
   /** Injectable for deterministic tests; defaults to crypto.randomUUID(). */
   readonly createKey?: () => string
+  /** Values the form starts with (and returns to on Reset). Defaults to an empty form. */
+  readonly initialValues?: FormValues
 }
 
 type SimulationMode = 'retry' | 'second-admin'
@@ -112,11 +114,15 @@ function buildRequest(value: ValidDisbursement, idempotencyKey: string): Disburs
   }
 }
 
-export function DisbursementForm({ server, createKey = createIdempotencyKey }: DisbursementFormProps) {
+export function DisbursementForm({
+  server,
+  createKey = createIdempotencyKey,
+  initialValues = EMPTY_VALUES,
+}: DisbursementFormProps) {
   const id = useId()
   const fieldId = (field: FieldName): string => `${id}-${field}`
 
-  const [values, setValues] = useState<FormValues>(EMPTY_VALUES)
+  const [values, setValues] = useState<FormValues>(initialValues)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [attempted, setAttempted] = useState(false)
   const [idempotencyKey, setIdempotencyKey] = useState(createKey)
@@ -219,7 +225,7 @@ export function DisbursementForm({ server, createKey = createIdempotencyKey }: D
     setLedger(server.getLedger())
     setLog([])
     setBanner(null)
-    setValues(EMPTY_VALUES)
+    setValues(initialValues)
     setErrors({})
     setAttempted(false)
     setIdempotencyKey(createKey())
@@ -305,63 +311,11 @@ export function DisbursementForm({ server, createKey = createIdempotencyKey }: D
           ) : null}
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div>
-            {label('loanId')}
-            <select {...fieldProps('loanId')}>
-              <option value="">Select a loan…</option>
-              {approvedLoans.map((loan) => (
-                <option key={loan.id} value={loan.id}>
-                  {loan.id} · {loan.borrowerId} · v{loan.version}
-                </option>
-              ))}
-            </select>
-            {fieldMeta('loanId')}
-          </div>
-
-          <div>
-            {label('provider')}
-            <select {...fieldProps('provider')}>
-              <option value="">Select a wallet…</option>
-              {WALLET_PROVIDERS.map((provider) => (
-                <option key={provider.value} value={provider.value}>
-                  {provider.label}
-                </option>
-              ))}
-            </select>
-            {fieldMeta('provider')}
-          </div>
-
-          <div>
-            {label('recipientMobile')}
-            <input {...fieldProps('recipientMobile')} type="tel" inputMode="numeric" autoComplete="off" maxLength={11} />
-            {fieldMeta('recipientMobile')}
-          </div>
-
-          <div>
-            {label('amount')}
-            <input {...fieldProps('amount')} type="text" inputMode="decimal" autoComplete="off" />
-            {fieldMeta('amount')}
-          </div>
-
-          <div>
-            {label('dailyCap')}
-            <input {...fieldProps('dailyCap')} type="text" inputMode="decimal" autoComplete="off" />
-            {fieldMeta('dailyCap')}
-          </div>
-
-          <div>
-            {label('referenceNote')}
-            <textarea {...fieldProps('referenceNote')} rows={2} />
-            {fieldMeta('referenceNote')}
-          </div>
-        </div>
-
         <section aria-labelledby={`${id}-preview`} className="rounded-md border border-slate-700 p-3">
           <h3 id={`${id}-preview`} className="text-sm font-semibold">
             Request &amp; journal preview
           </h3>
-          <dl className="mt-2 grid gap-x-3 gap-y-1 font-mono text-xs text-slate-300 sm:grid-cols-[auto_1fr]">
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono text-xs text-slate-300">
             <dt>Idempotency-Key</dt>
             <dd className="break-all text-slate-100">{idempotencyKey}</dd>
             <dt>If-Match</dt>
@@ -398,11 +352,7 @@ export function DisbursementForm({ server, createKey = createIdempotencyKey }: D
         </div>
 
         <fieldset className="space-y-3 rounded-md border border-amber-400/60 p-3">
-          <legend className="px-1 text-sm font-semibold text-amber-200">Concurrency demo</legend>
-          <p className="text-sm text-slate-300">
-            The Disburse button disables itself on the first click, so a real double-click never reaches the
-            network. This sends two requests back-to-back anyway.
-          </p>
+          <legend className="px-1 text-sm font-semibold text-amber-200">Send the same payout twice</legend>
           <div className="flex flex-col gap-2 text-sm sm:flex-row sm:gap-6">
             <label className="flex items-center gap-2">
               <input
@@ -412,7 +362,7 @@ export function DisbursementForm({ server, createKey = createIdempotencyKey }: D
                 checked={mode === 'retry'}
                 onChange={() => setMode('retry')}
               />
-              Network retry (same Idempotency-Key)
+              Network retry (same key)
             </label>
             <label className="flex items-center gap-2">
               <input
@@ -422,7 +372,7 @@ export function DisbursementForm({ server, createKey = createIdempotencyKey }: D
                 checked={mode === 'second-admin'}
                 onChange={() => setMode('second-admin')}
               />
-              Two admins (new key, same If-Match)
+              Two admins (same If-Match)
             </label>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -445,6 +395,62 @@ export function DisbursementForm({ server, createKey = createIdempotencyKey }: D
             </button>
           </div>
         </fieldset>
+        <section aria-labelledby={`${id}-details`} className="space-y-4 border-t border-slate-800 pt-5">
+          <h3 id={`${id}-details`} className="text-base font-semibold">
+            Payout details
+          </h3>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              {label('loanId')}
+              <select {...fieldProps('loanId')}>
+                <option value="">Select a loan…</option>
+                {approvedLoans.map((loan) => (
+                  <option key={loan.id} value={loan.id}>
+                    {loan.id} · {loan.borrowerId} · v{loan.version}
+                  </option>
+                ))}
+              </select>
+              {fieldMeta('loanId')}
+            </div>
+
+            <div>
+              {label('provider')}
+              <select {...fieldProps('provider')}>
+                <option value="">Select a wallet…</option>
+                {WALLET_PROVIDERS.map((provider) => (
+                  <option key={provider.value} value={provider.value}>
+                    {provider.label}
+                  </option>
+                ))}
+              </select>
+              {fieldMeta('provider')}
+            </div>
+
+            <div>
+              {label('recipientMobile')}
+              <input {...fieldProps('recipientMobile')} type="tel" inputMode="numeric" autoComplete="off" maxLength={11} />
+              {fieldMeta('recipientMobile')}
+            </div>
+
+            <div>
+              {label('amount')}
+              <input {...fieldProps('amount')} type="text" inputMode="decimal" autoComplete="off" />
+              {fieldMeta('amount')}
+            </div>
+
+            <div>
+              {label('dailyCap')}
+              <input {...fieldProps('dailyCap')} type="text" inputMode="decimal" autoComplete="off" />
+              {fieldMeta('dailyCap')}
+            </div>
+
+            <div>
+              {label('referenceNote')}
+              <textarea {...fieldProps('referenceNote')} rows={2} />
+              {fieldMeta('referenceNote')}
+            </div>
+          </div>
+        </section>
       </form>
 
       <section aria-labelledby={`${id}-log`} className="space-y-2">

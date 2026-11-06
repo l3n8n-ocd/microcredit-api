@@ -4,7 +4,7 @@ import { isUuidV4 } from '../../../utils/index.ts'
 import { DisbursementForm } from '../DisbursementForm.tsx'
 import { createDisbursementServer, type DisbursementServer } from '../disbursementServer.ts'
 import { accountBalance, journalTotals } from '../ledger.ts'
-import { SEED_LOANS } from '../seedLoans.ts'
+import { SAMPLE_PAYOUT, SEED_LOANS } from '../seedLoans.ts'
 
 afterEach(() => {
   cleanup()
@@ -150,7 +150,7 @@ describe('DisbursementForm: duplicates never double-credit the borrower', () => 
   it('rejects the second of two admins (new key, same If-Match) with 409 and no second entry', async () => {
     const { server, ui } = setup()
     fill(ui)
-    fireEvent.click(ui.getByLabelText('Two admins (new key, same If-Match)'))
+    fireEvent.click(ui.getByLabelText('Two admins (same If-Match)'))
     fireEvent.click(ui.getByRole('button', { name: 'Simulate double-click / network retry' }))
 
     await waitFor(() => {
@@ -299,5 +299,47 @@ describe('DisbursementForm: validation and accessibility', () => {
     fill(ui, { referenceNote: 'x'.repeat(141) })
     fireEvent.click(disburseButton(ui))
     expect(ui.getByLabelText('Reference note (optional)').getAttribute('aria-invalid')).toBe('true')
+  })
+})
+
+describe('DisbursementForm: pre-filled sample payout (the demo opens ready to test)', () => {
+  function setupSample() {
+    const server = createDisbursementServer(SEED_LOANS)
+    const view = render(<DisbursementForm server={server} createKey={keyFactory()} initialValues={SAMPLE_PAYOUT} />)
+    return { server, ui: within(view.container) }
+  }
+
+  it('starts on a valid payout, so Simulate replays the retry without any typing', async () => {
+    const { server, ui } = setupSample()
+    expect((ui.getByLabelText('Approved loan') as HTMLSelectElement).value).toBe('L-1042')
+    expect((ui.getByLabelText('Principal amount (PHP)') as HTMLInputElement).value).toBe('5,000.00')
+    for (const label of ['Approved loan', 'Wallet provider', 'Recipient mobile number', 'Principal amount (PHP)']) {
+      expect(ui.getByLabelText(label).getAttribute('aria-invalid')).toBe('false')
+    }
+
+    fireEvent.click(ui.getByRole('button', { name: 'Simulate double-click / network retry' }))
+
+    await waitFor(() => {
+      expect(ui.getAllByTestId('request-log-entry')).toHaveLength(2)
+    })
+    const [first, second] = ui.getAllByTestId('request-log-entry')
+    expect(first?.textContent).toContain('201 Created · posted JE-0001')
+    expect(second?.textContent).toContain('201 Idempotent replay of JE-0001 · no new ledger entry')
+    expect(server.getLedger()).toHaveLength(1)
+    expect(journalTotals(server.getLedger().flatMap((entry) => entry.lines)).balanced).toBe(true)
+  })
+
+  it('Reset demo returns to the sample payout, not an empty form', async () => {
+    const { ui } = setupSample()
+    fireEvent.click(disburseButton(ui))
+    await waitFor(() => {
+      expect(ui.getAllByTestId('request-log-entry')).toHaveLength(1)
+    })
+    // A fulfilled intent clears the loan so the next payout is a new intent.
+    expect((ui.getByLabelText('Approved loan') as HTMLSelectElement).value).toBe('')
+
+    fireEvent.click(ui.getByRole('button', { name: 'Reset demo' }))
+    expect((ui.getByLabelText('Approved loan') as HTMLSelectElement).value).toBe('L-1042')
+    expect(ui.queryAllByTestId('request-log-entry')).toHaveLength(0)
   })
 })
