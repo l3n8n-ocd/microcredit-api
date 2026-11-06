@@ -174,6 +174,11 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - Round 2 (precise, merged to `main`): [`feat/disburse-form-precise`](https://github.com/l3n8n-ocd/microcredit-api/tree/feat/disburse-form-precise)
 
   The rules learned from the drill are in [`CLAUDE.md` §11](./CLAUDE.md#11-learned-rules-from-fe-03fe-04-workflow-drill).
+- **The Prompt Ladder (Week 2 · General AI Fluency):** [`docs/PROMPT_LADDER.md`](./docs/PROMPT_LADDER.md)
+  records 6 real runs (a baseline plus 5 single-layer versions) of the FL-01 T1 state-machine prompt,
+  each type-checked and behavior-probed. It includes an honest regression (the JSON output format) and
+  a reusable, placeholder-based prompt template. Raw outputs and the measurement harness are in
+  [`docs/prompt-ladder/`](./docs/prompt-ladder/).
 
 ## License
 
