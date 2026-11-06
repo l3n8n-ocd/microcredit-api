@@ -19,7 +19,7 @@ REFERENCE = "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N"
 W = {"AV": {"N": .85, "A": .62, "L": .55, "P": .2}, "AC": {"L": .77, "H": .44}, "UI": {"N": .85, "R": .62},
      "CIA": {"H": .56, "L": .22, "N": 0.0}}
 PR = {"U": {"N": .85, "L": .62, "H": .27}, "C": {"N": .85, "L": .68, "H": .5}}
-VECTOR = re.compile(r"CVSS:3\.1/AV:[NALP]/AC:[LH]/PR:[NLH]/UI:[NR]/S:[UC]/C:[NLH]/I:[NLH]/A:[NLH]")
+VECTOR = re.compile(r"(CVSS:3\.1/)?(AV:[NALP]/AC:[LH]/PR:[NLH]/UI:[NR]/S:[UC]/C:[NLH]/I:[NLH]/A:[NLH])")
 
 
 def roundup(value: float) -> float:
@@ -66,13 +66,16 @@ def measure(path: Path) -> dict[str, str]:
     for m in (advisory_match, scratch_match):
         if m:
             outside = outside.replace(m.group(0), "")
-    vectors = sorted(set(VECTOR.findall(advisory)))
-    vector = vectors[0] if vectors else None
+    first = VECTOR.search(advisory)  # the first vector stated is treated as the advisory's primary score
+    vector = "CVSS:3.1/" + first.group(2) if first else None
+    prefixed = bool(first and first.group(1))
     stated = None
-    if vector:
-        after = advisory[advisory.index(vector):][:400]
-        num = re.search(r"\b(\d{1,2}\.\d)\b", after) or re.search(r"(?i)score[^0-9]{0,40}(\d{1,2}\.\d)", advisory)
-        stated = num.group(1) if num else None
+    if first:
+        after = advisory[first.end():][:300]
+        score = r"(?<![\d:./])(\d{1,2}\.\d)(?![\d/])"
+        num = re.search(score, after)
+        before = re.findall(score, advisory[max(0, first.start() - 120):first.start()])
+        stated = num.group(1) if num else (before[-1] if before else None)
     computed = base_score(vector) if vector else None
     headings = " ".join(re.findall(r"^#{1,4} .*$", advisory, re.M)).lower()
     sections = {
@@ -93,7 +96,7 @@ def measure(path: Path) -> dict[str, str]:
         "Invented CVE IDs": str(len(cves)) + (f" ({', '.join(cves)})" if cves else ""),
         "FL-01 sections": f"{sum(sections.values())}/6" + ("" if all(sections.values()) else
                           " (missing: " + ", ".join(k for k, v in sections.items() if not v) + ")"),
-        "CVSS v3.1 vector": f"`{vector}`" if vector else "none",
+        "CVSS v3.1 vector": (f"`{vector}`" + ("" if prefixed else " (no `CVSS:3.1/` prefix)")) if vector else "none",
         "Stated / computed score": f"{stated or '—'} / {computed if computed is not None else '—'}",
         "vs. reference": metric_diff(vector) if vector else "—",
         "Text outside tags": (f"{len(outside.split())} words" if advisory_match else "no tags"),
