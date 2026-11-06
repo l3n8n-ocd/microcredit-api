@@ -5,3 +5,19 @@
   --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+/*
+ * Turn off JetBrains Mono ligatures: in ledger lines the operator `===` was
+ * drawn as one long bar, which misreads as a different glyph. Every monospace
+ * run shows the exact characters (`===`, `->`, `!==`).
+ */
+@layer base {
+  code,
+  pre,
+  kbd,
+  samp,
+  .font-mono {
+    font-variant-ligatures: none;
+    font-feature-settings: 'liga' 0, 'calt' 0;
+  }
+}
