@@ -45,9 +45,9 @@ act on.
 | ---- | ------ |
 | Toolchain, lint, tests, git hooks, CI | ✅ In place |
 | `Disburse` flow with `Idempotency-Key` + `If-Match` | ✅ Built and tested in [`src/features/disbursement/`](./src/features/disbursement/), against an in-memory mock API (no real backend or wallet yet) |
-| Loan state machine | 🟡 Partial: 5 of the 10 states below (`APPLIED` → `DISBURSED` / `REJECTED`) |
-| Double-entry ledger | 🟡 Partial: disbursement journal entries only; repayments and reversals not built |
-| Credit scoring | ⬜ Designed, not yet implemented |
+| Loan state machine | ✅ Built and tested: all 10 states below as one discriminated union in [`loanStateMachine.ts`](./src/features/disbursement/loanStateMachine.ts); 100 `(state, event)` pairs tested, 88 illegal ones rejected as a typed `409` |
+| Double-entry ledger | ✅ Built and tested: disbursement, repayment (principal + interest) and compensating-reversal entries in [`ledger.ts`](./src/features/disbursement/ledger.ts), each checked for `Σ debits === Σ credits`; in-memory mock API |
+| Credit scoring | ✅ Built and tested: 3-signal trust score (0–1000) with reason codes and a limit in `Centavos`, in [`src/features/scoring/`](./src/features/scoring/); demo profiles only, no real borrower data |
 | Deployed demo | ✅ [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app) (Vercel, imported from `main`; mock API, no real wallet payouts) |
 
 ## Loan Lifecycle State Machine
@@ -65,10 +65,12 @@ stateDiagram-v2
     APPROVED --> DISBURSED: Wallet payout confirmed (idempotent)
     APPROVED --> CANCELLED: Borrower declines / offer expires
     DISBURSED --> REPAYING: First repayment posted
-    REPAYING --> REPAYING: Partial repayment posted
+    DISBURSED --> SETTLED: One repayment clears all principal
+    REPAYING --> REPAYING: Partial repayment posted / reversed
     REPAYING --> SETTLED: Outstanding balance = 0
     REPAYING --> DELINQUENT: Payment > 30 days past due
     DELINQUENT --> REPAYING: Arrears cured
+    DELINQUENT --> DELINQUENT: Repayment reversed
     DELINQUENT --> DEFAULTED: Payment > 90 days past due
     REJECTED --> [*]
     CANCELLED --> [*]
@@ -190,6 +192,22 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   Few-Shot, Output Structure, Step Decomposition). It covers 11 real runs on two Claude models, each
   measured for leaked secrets, sections and CVSS, plus a reusable template. Evidence is in
   [`docs/fl-02/`](./docs/fl-02/).
+- **Week 3 · React App Development with AI:** [`docs/WEEK3_REACT_AI_DEVELOPMENT.md`](./docs/WEEK3_REACT_AI_DEVELOPMENT.md)
+  - **Built:** an alt-data underwriting workbench (`UNDER_REVIEW → APPROVED` feeds the Disburse form), a
+    repayment and compensating-reversal panel, and the full 10-state `LoanState` union. All of it sits
+    under the Disburse demo in [`src/App.tsx`](./src/App.tsx).
+  - **Prompts:** one brief, kept verbatim, plus the 5 steps it was worked in and a derived 5-prompt
+    sequence (labelled "not run").
+  - **AI assistance:** Claude Code wrote both commits. The doc lists 5 problems the brief did not
+    predict, for example a live-sync that broke the stale-`If-Match` test.
+  - **4 refactors**, each with a before/after diff and a mutation check that fails when it is undone:
+    1. a centavo split that lost ₱0.01 on ₱1,000.00, now `principal + interest === total`;
+    2. a pure `scoreEngine.ts` and a memoized `useUnderwritingQueue.ts`;
+    3. a reversal guard with `Idempotency-Key` + `If-Match`;
+    4. labelled controls, `aria-live` regions and focus moves.
+  - **Commits:** AI first pass [`4d2e502`](https://github.com/l3n8n-ocd/microcredit-api/commit/4d2e502),
+    code-review refactor [`f24c143`](https://github.com/l3n8n-ocd/microcredit-api/commit/f24c143).
+    The first-pass flaws were seeded by the brief, and the doc says so.
 
 ## License
 
