@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck · Lint · Test · Build
+    name: Typecheck · Lint · Test · Build · Fold
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,3 +27,9 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - name: Install Chromium and Roboto (the font Android phones render)
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends fonts-roboto
+      - name: Above-the-fold check (Disburse + Simulate visible at 360x740 and 1280x800)
+        run: npm run test:e2e
