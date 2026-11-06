@@ -81,6 +81,7 @@ Tooling around the stack: **oxlint** (lint), **Vitest** + jsdom + Testing Librar
 | `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports)|
 | `npm test`          | Run Vitest once                                            |
 | `npm run build`     | Typecheck + production build                               |
+| `npm run test:e2e`  | After `build`: Disburse + Simulate above the fold at 360×740 and 1280×800 (Playwright) |
 
 **Before saying any change is done, run `typecheck`, `lint`, and `test`, and
 report the results.** CI runs the same four steps on every push and pull request.

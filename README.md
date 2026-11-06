@@ -5,7 +5,8 @@
 > Alternative Credit Scoring & Micro-Lending Portal
 
 **Live demo: [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app)**.
-Double-click **Disburse** and only one request is sent. Then use **Simulate
+The demo opens on a pre-filled sample payout. Double-click **Disburse** and only one request is
+sent. Then use **Simulate
 double-click / network retry** to send the same request twice: the second one is
 replayed (same `Idempotency-Key`) or rejected with `409` (stale `If-Match`), and the
 ledger posts the payout once. The demo runs against an in-memory mock API, so
@@ -147,6 +148,7 @@ npm run dev
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
 | `npm test`          | Run the Vitest suite once                            |
+| `npm run test:e2e`  | After `build`: check Disburse + Simulate fit on the first screen (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
 Conventional Commits (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`).

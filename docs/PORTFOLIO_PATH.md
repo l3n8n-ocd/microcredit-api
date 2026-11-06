@@ -175,3 +175,7 @@ flowchart TD
 > - The [Node2Shell (CVE-2026-111497) advisory](https://docs.google.com/document/d/1tzEqUoyXrR5_RpeszSFKZX4LhVh_PnoSsjsf9wpNtJo/view).
 >
 > Framed copy for every section is in [`FRAME_IT_AS_CASES.md`](./FRAME_IT_AS_CASES.md).
+
+> **Update (2026-11-06): revision #1 is built.** The demo opens on a pre-filled sample payout with
+> **Disburse** and **Simulate** on the first screen, at both 360×740 and 1280×800. The CI check
+> `e2e/fold.mjs` enforces it (commit `7d33e50`).

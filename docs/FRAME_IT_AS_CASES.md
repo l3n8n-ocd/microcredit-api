@@ -46,8 +46,10 @@ Where Claude checked an answer against the repo or public sources, the log says 
 | 1 | Which real failure changed how you build money flows, and what do you do differently now? | "The parser bug changed how I build money flows. Round 1 passed typecheck, lint and all 5 tests, yet it turned `"90071992547409.93"` into `9007199254740992`, past `MAX_SAFE_INTEGER`, with no error. Green CI didn't mean correct money. Now I write the boundary into the spec first (13 whole-peso digits, otherwise `TOO_LARGE`, with a test), and I run a mutation check on every invariant: switching off the replay lookup failed 4 tests, which proves the replay-before-`If-Match` order is actually guarded." | **Drafted by Claude from repo evidence at my request, then approved by me.** Facts checked against [`WORKFLOW.md`](../WORKFLOW.md) and `src/utils/money.ts` (`MAX_WHOLE_PESO_DIGITS = 13`). |
 | 2 | The brief says the "Simulate double-click / network retry" control sits right above the fold. Does it? | No. Claude built the app and measured it: at 1280×800 the control starts at 955px, and at 360×740 at 1,523px. **Disburse** is below the first screen on both. | Playwright measurement of `npm run build` + `vite preview`. |
 
-**Correction:** the case says "one scroll below the form", not "above the fold". Moving the control above
-the fold is tracked as a TODO (see Case 1).
+**Correction, then fix:** the first draft couldn't honestly say "above the fold", so the demo was
+changed instead of the copy. It now opens on a pre-filled sample payout, with the preview, **Disburse**
+and **Simulate** placed before the editable fields. A Playwright check in CI holds the line: at 360×740
+the Simulate button ends at 717px, and at 1280×800 at 601px (commit `7d33e50`).
 
 ### Node2Shell (CVE-2026-111497)
 
@@ -106,6 +108,9 @@ between principal and interest.
 - I added a **Simulate double-click / network retry** control with two modes: *Network retry* (same
   key) and *Two admins* (new key, same `If-Match`). An Engineering Manager can try to break the ledger
   themselves.
+- **I put the test on the first screen.** The demo opens on a valid sample payout (`SAMPLE_PAYOUT`
+  in `src/features/disbursement/seedLoans.ts`), so **Disburse** and **Simulate** work with no typing.
+  The editable fields sit below them.
 
 **What Came of It.**
 - The live demo is at [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app). It
@@ -115,9 +120,10 @@ between principal and interest.
   ledger posts the payout once.
 - Each of those behaviors is a named test in a 101-test Vitest + Testing Library suite. CI runs
   `typecheck`, `lint` (oxlint, zero `any`), `test` and `build` on every push.
-- **TODO:** the Simulate control is one scroll below the form (955px on desktop, 1,523px on a phone).
-  Move it, with a pre-filled sample loan, above the fold, as PORTFOLIO_PATH v2 revision #1 calls
-  for, in a separate `feat:` commit with a Playwright fold test.
+- `e2e/fold.mjs` runs in CI on every push. It fails the build if **Disburse** or **Simulate** drops
+  below the first screen at 360×740 or 1280×800, or if Simulate stops producing exactly one
+  `201 Created` and one `201 Idempotent replay`. Removing the sample payout makes it fail, which I
+  checked on purpose.
 
 > **Why I build this way** (the bio, placed here as PORTFOLIO_PATH v2 asks): see
 > [§4 · Bio](#bio-why-i-build-this-way-inside-the-flagship-section).
@@ -148,7 +154,7 @@ nobody calls `zlib` on purpose, and `npm update` can't fix it, because the decod
   3. Detect with a Suricata rule for inbound `br` bodies and a Sigma rule for shells spawned by `node`.
 
 **What Came of It.**
-- A public technical advisory, published as Exemprium on Oct 26, 2026:
+- A public technical advisory, published under my pen name, Exemprium, on Oct 26, 2026:
   [Google Doc](https://docs.google.com/document/d/1tzEqUoyXrR5_RpeszSFKZX4LhVh_PnoSsjsf9wpNtJo/view) · [LinkedIn post](https://lnkd.in/p/g_V3bkhS).
 - The advisory documents the patched runtime answering the PoC with `HTTP 400`
   (`ERR_BROTLI_DECOMPRESSION_FAILED`) instead of corrupting memory.
@@ -187,10 +193,10 @@ Each line was written to be read out loud.
 ### Hero (`/`)
 
 > **I build loan disbursement flows that cannot pay a borrower twice.**
-> Fill in the form, press **Disburse**, then scroll to **Simulate double-click / network retry** and
-> watch the second request come back as a replay or a `409`.
+> A sample payout is ready on the first screen: press **Disburse**, or press **Simulate double-click /
+> network retry** and watch the second request come back as a replay or a `409`.
 >
-> **[ Book a 15-min code walkthrough ]** · *View the repo*
+> **[ Book a 15-min code walkthrough → github.com/l3n8n-ocd ]** · *View the repo*
 
 ### Bio: "Why I build this way" (inside the flagship section)
 
@@ -210,13 +216,14 @@ seconds won't open a philosophy page. Here are those notes, in first person:
 > Open [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app), fire **Simulate
 > double-click / network retry**, then read `src/features/disbursement/` at
 > [github.com/l3n8n-ocd/microcredit-api](https://github.com/l3n8n-ocd/microcredit-api).
-> If the second request bounced, book 15 minutes and I'll walk you through the replay-before-`If-Match`
-> check line by line.
+> If the second request bounced, reach me through the contact links on
+> [github.com/l3n8n-ocd](https://github.com/l3n8n-ocd), and I'll walk you through the
+> replay-before-`If-Match` check line by line in 15 minutes.
 >
-> **[ Book a 15-min walkthrough ]** · email
+> **[ Book a 15-min walkthrough → github.com/l3n8n-ocd ]**
 >
-> **TODO:** add the booking link and an email address, plus one line on role, time zone (Philippines,
-> UTC+8) and availability. Neither the link nor the availability exists yet.
+> **Open to:** internships and OJT, part-time or contract work, and full-time roles after I graduate.
+> I work remotely from Bulacan, Philippines (UTC+8).
 
 ---
 
