@@ -1,1 +1,7 @@
 @import 'tailwindcss';
+
+/* Identity Kit (docs/IDENTITY_KIT.md): the only two font families. Loaded in index.html. */
+@theme {
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}

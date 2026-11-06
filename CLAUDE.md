@@ -290,6 +290,18 @@ markers:
 sed '/voice-check:off/,/voice-check:on/d' docs/FRAME_IT_AS_CASES.md | grep -niwE 'results-driven|passionate|seamless|cutting-edge|leverag(e|ed|es|ing)|synergy|robust'
 ```
 
+### 9.4 Identity Kit Style Note
+
+Source: [`docs/IDENTITY_KIT.md`](./docs/IDENTITY_KIT.md). Use exactly these 2 fonts and 4 hex codes for
+the whole 10-week build. Paste the same two lines into the Claude Project's instructions.
+
+> **Line 1 (Fonts & Hex Palette):** Heading & UI in Plus Jakarta Sans (`600`/`700`), technical/ledger data in JetBrains Mono (`400`/`500`); Palette: Near-White Background `F8FAFC`, Near-Black Text `0F172A`, Main Brand Slate `1E293B`, and Single Emerald Accent `059669`.
+>
+> **Line 2 (The Mood):** A calm, high-contrast ledger-sheet aesthetic with generous whitespace and zero decorative gradients, ensuring the interactive state machines, centavo accounting invariants, and security diffs remain the loudest things on the page.
+
+Accent `059669` is never text on `F8FAFC` (3.60:1 fails AA). Use it as a fill under `0F172A` text
+(4.74:1), a border, a dot, or a focus ring.
+
 ---
 
 ## 10. Claude Project Custom Instructions & FL-02 → FL-04 Target Tasks
@@ -402,18 +414,21 @@ reference implementation. A PR that breaks any rule is rejected.
 
 ## 12. Visual Constraints (Portfolio Design System)
 
-Source: [`docs/PORTFOLIO_DESIGN_SYSTEM.md`](./docs/PORTFOLIO_DESIGN_SYSTEM.md). These apply to every
-component an AI generates, in `src/` and on the portfolio site. The design frames the proof; it never
+Sources: [`docs/IDENTITY_KIT.md`](./docs/IDENTITY_KIT.md) for fonts and colours (it replaces the dark
+palette and Inter from the design system doc), and
+[`docs/PORTFOLIO_DESIGN_SYSTEM.md`](./docs/PORTFOLIO_DESIGN_SYSTEM.md) for framing rules. These apply to
+every component an AI generates, in `src/` and on the portfolio site. The design frames the proof; it never
 upstages it.
 
-1. **Approved colours only.** Portfolio: the §4 tokens (`obsidian`, `card`, `line`, `field`, `ink`,
-   `muted`, `ok`, `link`, `fail`). Demo app in `src/`: the Tailwind families already in use, `slate`,
+1. **Approved colours only.** Portfolio: the 4 Identity Kit colours (`#F8FAFC`, `#0F172A`, `#1E293B`,
+   `#059669`) via the CSS variables in `docs/IDENTITY_KIT.md` §5. Demo app in `src/`: the Tailwind families already in use, `slate`,
    `emerald` (success), `rose` (409 / 422 / errors) and `amber` (Simulate / replay), plus `sky` for links
    and `white`. No other hue family, and no raw hex such as `text-[#ff00aa]`.
 2. **Each colour keeps its one meaning.** Green only next to something that passed (`201`,
    `Σ debits === Σ credits`), red only next to a bounce. Never colour alone (§6).
-3. **Three font families.** Portfolio: Plus Jakarta Sans (headings), Inter (body), JetBrains Mono (code,
-   headers, amounts, paths). Demo app: the system font stack, so no web fonts reach low-end Android.
+3. **Two font families, everywhere.** Plus Jakarta Sans (headings, body, UI) and JetBrains Mono (code,
+   headers, amounts, paths), loaded once in `index.html` with `display=swap` and set as `--font-sans` /
+   `--font-mono` in `src/index.css`. No third family.
 4. **No decorative clutter.** No gradients, `animate-*`, parallax, stock photos, abstract AI art or
    illustrations in the hero. Motion is at most a 150 ms transition and respects
    `prefers-reduced-motion`.

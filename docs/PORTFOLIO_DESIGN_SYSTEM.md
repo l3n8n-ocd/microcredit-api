@@ -5,6 +5,11 @@
 > Manager at a seed-to-Series A lending startup · Sitemap: [`PORTFOLIO_PATH.md` v2](./PORTFOLIO_PATH.md#revised-sitemap-v2--3-sections)
 > · Copy: [`FRAME_IT_AS_CASES.md`](./FRAME_IT_AS_CASES.md)
 
+> **Superseded for colours and fonts (2026-11-06):** [`IDENTITY_KIT.md`](./IDENTITY_KIT.md) decided a
+> light, 4-colour palette (`#F8FAFC`, `#0F172A`, `#1E293B`, `#059669`) and 2 fonts (Plus Jakarta Sans,
+> JetBrains Mono). Those replace the dark tokens and Inter below. The framing rules, the image log and
+> the "one meaning per colour" rule still apply.
+
 The idea: a portfolio looks professional because a few rules are applied every time, not because
 someone has an eye for design. Each rule below is small enough to check with a command or a
 contrast number.
