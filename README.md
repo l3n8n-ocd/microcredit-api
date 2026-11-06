@@ -36,8 +36,10 @@ act on.
 | Area | Status |
 | ---- | ------ |
 | Toolchain, lint, tests, git hooks, CI | ✅ In place |
-| `Disburse` flow with `Idempotency-Key` + `If-Match` | ⬜ Not built yet (next priority, see [`CLAUDE.md`](./CLAUDE.md#0-proof-statement--read-first) §0) |
-| Loan state machine, ledger, credit scoring | ⬜ Designed below, not yet implemented |
+| `Disburse` flow with `Idempotency-Key` + `If-Match` | ✅ Built and tested in [`src/features/disbursement/`](./src/features/disbursement/), against an in-memory mock API (no real backend or wallet yet) |
+| Loan state machine | 🟡 Partial: 5 of the 10 states below (`APPLIED` → `DISBURSED` / `REJECTED`) |
+| Double-entry ledger | 🟡 Partial: disbursement journal entries only; repayments and reversals not built |
+| Credit scoring | ⬜ Designed, not yet implemented |
 | Deployed demo | ⬜ Not deployed yet |
 
 ## Loan Lifecycle State Machine
@@ -158,6 +160,13 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
 - **FL-01 · AI Workflow Audit and Tool Setup:** [`docs/FL-01_WORKFLOW_AUDIT.md`](./docs/FL-01_WORKFLOW_AUDIT.md)
   covers the 12-task weekly audit, the three target tasks for FL-02 → FL-04 with
   measurable "Done Well" criteria, and the Claude Project custom instructions.
+- **FE-03 / FE-04 · AI-Assisted Workflow Drill:** [`WORKFLOW.md`](./WORKFLOW.md)
+  compares a vague prompt against a precise spec for the same Disburse form.
+  Both rounds are kept as branches:
+  - Round 1 (vague): [`feat/disburse-form-vague`](https://github.com/l3n8n-ocd/microcredit-api/tree/feat/disburse-form-vague)
+  - Round 2 (precise, merged to `main`): [`feat/disburse-form-precise`](https://github.com/l3n8n-ocd/microcredit-api/tree/feat/disburse-form-precise)
+
+  The rules learned from the drill are in [`CLAUDE.md` §11](./CLAUDE.md#11-learned-rules-from-fe-03fe-04-workflow-drill).
 
 ## License
 

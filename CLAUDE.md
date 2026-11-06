@@ -327,3 +327,40 @@ BOUNDARIES
 When work touches one of these tasks, measure it against its "Done Well" table
 and say which criteria pass, fail, or are untested.
 
+
+---
+
+## 11. Learned Rules from FE-03/FE-04 Workflow Drill
+
+Source: [`WORKFLOW.md`](./WORKFLOW.md). Round 1 (`feat/disburse-form-vague`) passed
+CI while violating each rule below; Round 2 (`feat/disburse-form-precise`) is the
+reference implementation. A PR that breaks any rule is rejected.
+
+1. **Every form control is bound and tested.** Each `<input>`, `<select>` and
+   `<textarea>` has a `<label htmlFor>` equal to its `id`, renders
+   `aria-invalid="true"|"false"` (never omitted), and has `aria-describedby`
+   pointing at its hint, plus its `-error` element whenever an error is shown.
+   A failed submit renders one `role="alert"` summary and moves focus to the
+   first invalid field. *Check:* the feature's test file has a
+   `getByLabelText(...)` + `aria-invalid` assertion for every field. A new field
+   without one fails review.
+2. **Money enters only through `parsePesosToCentavos`.** User-typed amounts are
+   parsed string → `Centavos` by `src/utils/money.ts` and nowhere else; no
+   `as Centavos` casts. Display goes through `formatPHP`. *Check:* this returns
+   no lines:
+   `grep -rnE "parseFloat|toFixed|\* ?100\b|/ ?100\b|as Centavos" src --include=*.ts --include=*.tsx | grep -v '\.test\.' | grep -vE ':[0-9]+:\s*(\*|//|/\*)'`.
+   Parsers have tests for float drift (`"19.99"` → `1999`), more than 2 decimals,
+   exponents (`"1e3"`), and a value past `Number.MAX_SAFE_INTEGER`.
+3. **Money mutations carry `Idempotency-Key` + `If-Match`, replay first.** The
+   request type declares both headers as required (non-optional) strings. The
+   key comes from `createIdempotencyKey()` and changes only when the payload
+   changes. The handler checks for a stored key *before* comparing versions.
+   Submit is `disabled` and `aria-busy="true"` while in flight. *Check:* tests
+   prove that (a) two concurrent same-key requests leave exactly one ledger
+   entry, and (b) a new key with a stale `If-Match` returns `409` with no entry.
+4. **Four green checks before every commit, plus a failing-first test for
+   invariants.** `npm run typecheck`, `npm run lint`, `npm test` and
+   `npm run build` all exit 0, and the results are reported. Vitest alone is not
+   enough: an unused import passed Vitest but failed `tsc` in Round 2. A change
+   to a money or concurrency invariant ships with a test in the same commit,
+   and that test fails when the change is reverted (a mutation check).
