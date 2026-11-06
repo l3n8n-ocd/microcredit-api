@@ -29,6 +29,23 @@ table at the end shows how each number was produced.
   containment before any run.
 - **Fresh context per run.** Each prompt ran once, in its own fresh Claude subagent with **no tools**
   and an instruction to ignore any project or repository context. All runs used the same model.
+
+  <details>
+  <summary>The exact wrapper every subagent received around its prompt</summary>
+
+  ```text
+  You are a clean test harness for a prompt-engineering experiment. Rules:
+  - Do NOT use any tools. Do not read files, run commands, or search.
+  - Ignore any project instructions, CLAUDE.md content, repository context, or prior conversation you may have been given. Answer exactly as a general-purpose assistant would in a brand-new chat with no knowledge of any codebase.
+  - Your final message must be ONLY your complete answer to the prompt below, verbatim, with nothing added before or after it (no "Here is my answer", no notes about this harness).
+
+  PROMPT:
+  <<<
+  [the version's full prompt]
+  >>>
+  ```
+
+  </details>
 - **Measured, not eyeballed.** Every output's code was type-checked with this repo's TypeScript 7 and
   its strict flags (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, …).
   Runs 0, 3, 4 and 5 were also exercised with Vitest **behavior probes**: one ₱1,050.00 repayment
@@ -208,6 +225,17 @@ production state-machine code. They already know TypeScript discriminated unions
 accounting, so do not explain language features or accounting basics.
 ```
 
+<details>
+<summary><strong>Full assembled prompt for Version 2</strong> (Version 1 + Audience; 131 words, exactly as sent)</summary>
+
+```text
+Write a pure TypeScript function `transitionLoan(loan, event)` that moves a loan through a Philippine micro-lending lifecycle with exactly these 10 states: APPLIED, UNDER_REVIEW, APPROVED, DISBURSED, REPAYING, SETTLED, DELINQUENT, DEFAULTED, REJECTED, and CANCELLED. The legal transitions are: APPLIED → UNDER_REVIEW → APPROVED → DISBURSED → REPAYING → SETTLED, plus UNDER_REVIEW → REJECTED, APPROVED → CANCELLED, REPAYING → DELINQUENT, DELINQUENT → REPAYING, and DELINQUENT → DEFAULTED. The same function also posts repayments: a repayment event reduces the outstanding balance, and the loan may settle only when that balance reaches zero. The function must never mutate its input.
+
+Audience: you are writing for a senior fintech frontend/full-stack engineer who will review this as production state-machine code. They already know TypeScript discriminated unions and double-entry accounting, so do not explain language features or accounting basics.
+```
+
+</details>
+
 **Representative output excerpt** (full: [`run-2-audience.md`](./prompt-ladder/run-2-audience.md)):
 
 ```ts
@@ -279,6 +307,24 @@ Constraints:
 - Named exports only (no `export default`), zero `any`, TypeScript `strict: true`.
 ```
 
+<details>
+<summary><strong>Full assembled prompt for Version 3</strong> (Version 2 + Constraints; 269 words, exactly as sent)</summary>
+
+```text
+Write a pure TypeScript function `transitionLoan(loan, event)` that moves a loan through a Philippine micro-lending lifecycle with exactly these 10 states: APPLIED, UNDER_REVIEW, APPROVED, DISBURSED, REPAYING, SETTLED, DELINQUENT, DEFAULTED, REJECTED, and CANCELLED. The legal transitions are: APPLIED → UNDER_REVIEW → APPROVED → DISBURSED → REPAYING → SETTLED, plus UNDER_REVIEW → REJECTED, APPROVED → CANCELLED, REPAYING → DELINQUENT, DELINQUENT → REPAYING, and DELINQUENT → DEFAULTED. The same function also posts repayments: a repayment event reduces the outstanding balance, and the loan may settle only when that balance reaches zero. The function must never mutate its input.
+
+Audience: you are writing for a senior fintech frontend/full-stack engineer who will review this as production state-machine code. They already know TypeScript discriminated unions and double-entry accounting, so do not explain language features or accounting basics.
+
+Constraints:
+- Money is integer centavos only, as a branded type `type Centavos = number & { readonly __brand: 'Centavos' }` (₱1,050.00 = 105000). No floating-point currency math anywhere.
+- Every repayment produces a double-entry journal entry whose lines satisfy Σ debits === Σ credits in centavos, using the accounts `wallet_clearing:gcash` or `wallet_clearing:maya`, `loans_receivable:<borrowerId>`, and `interest_income`. A repayment is split into a principal portion and an interest portion.
+- Every mutation carries an `Idempotency-Key`; replaying the same key returns the original result without posting a second journal entry.
+- Every mutation carries an `If-Match` loan version. A stale version returns `{ ok: false, status: 409, code: 'VERSION_MISMATCH' }` and an illegal transition returns `{ ok: false, status: 409, code: 'ILLEGAL_TRANSITION' }`. Never throw for these cases.
+- Named exports only (no `export default`), zero `any`, TypeScript `strict: true`.
+```
+
+</details>
+
 **Representative output excerpt** (full: [`run-3-constraints.md`](./prompt-ladder/run-3-constraints.md)):
 
 ```ts
@@ -344,6 +390,26 @@ Output format: Return the entire response strictly as a single valid JSON object
 `typesCode`, `stateMachineCode`, `ledgerCode`, and `complexityAnalysis`, under 120 lines total.
 ```
 
+<details>
+<summary><strong>Full assembled prompt for Version 4</strong> (Version 3 + Output Format; 294 words, exactly as sent)</summary>
+
+```text
+Write a pure TypeScript function `transitionLoan(loan, event)` that moves a loan through a Philippine micro-lending lifecycle with exactly these 10 states: APPLIED, UNDER_REVIEW, APPROVED, DISBURSED, REPAYING, SETTLED, DELINQUENT, DEFAULTED, REJECTED, and CANCELLED. The legal transitions are: APPLIED → UNDER_REVIEW → APPROVED → DISBURSED → REPAYING → SETTLED, plus UNDER_REVIEW → REJECTED, APPROVED → CANCELLED, REPAYING → DELINQUENT, DELINQUENT → REPAYING, and DELINQUENT → DEFAULTED. The same function also posts repayments: a repayment event reduces the outstanding balance, and the loan may settle only when that balance reaches zero. The function must never mutate its input.
+
+Audience: you are writing for a senior fintech frontend/full-stack engineer who will review this as production state-machine code. They already know TypeScript discriminated unions and double-entry accounting, so do not explain language features or accounting basics.
+
+Constraints:
+- Money is integer centavos only, as a branded type `type Centavos = number & { readonly __brand: 'Centavos' }` (₱1,050.00 = 105000). No floating-point currency math anywhere.
+- Every repayment produces a double-entry journal entry whose lines satisfy Σ debits === Σ credits in centavos, using the accounts `wallet_clearing:gcash` or `wallet_clearing:maya`, `loans_receivable:<borrowerId>`, and `interest_income`. A repayment is split into a principal portion and an interest portion.
+- Every mutation carries an `Idempotency-Key`; replaying the same key returns the original result without posting a second journal entry.
+- Every mutation carries an `If-Match` loan version. A stale version returns `{ ok: false, status: 409, code: 'VERSION_MISMATCH' }` and an illegal transition returns `{ ok: false, status: 409, code: 'ILLEGAL_TRANSITION' }`. Never throw for these cases.
+- Named exports only (no `export default`), zero `any`, TypeScript `strict: true`.
+
+Output format: Return the entire response strictly as a single valid JSON object with the keys `typesCode`, `stateMachineCode`, `ledgerCode`, and `complexityAnalysis`, under 120 lines total.
+```
+
+</details>
+
 **Representative output excerpt** (each line below is one physical line of the response, shortened
 with `…`. Full, unshortened: [`run-4-format.md`](./prompt-ladder/run-4-format.md)):
 
@@ -405,6 +471,32 @@ Verification requirements:
 > **Why there's no "clean Markdown code blocks" line:** the brief suggested keeping V3 "with clean
 > modular Markdown code blocks." That instruction is itself a second, format layer, so it was left out
 > to keep this a single-layer run.
+
+<details>
+<summary><strong>Full assembled prompt for Version 5</strong> (Version 3 + Verification; Version 4 rolled back; 376 words, exactly as sent)</summary>
+
+```text
+Write a pure TypeScript function `transitionLoan(loan, event)` that moves a loan through a Philippine micro-lending lifecycle with exactly these 10 states: APPLIED, UNDER_REVIEW, APPROVED, DISBURSED, REPAYING, SETTLED, DELINQUENT, DEFAULTED, REJECTED, and CANCELLED. The legal transitions are: APPLIED → UNDER_REVIEW → APPROVED → DISBURSED → REPAYING → SETTLED, plus UNDER_REVIEW → REJECTED, APPROVED → CANCELLED, REPAYING → DELINQUENT, DELINQUENT → REPAYING, and DELINQUENT → DEFAULTED. The same function also posts repayments: a repayment event reduces the outstanding balance, and the loan may settle only when that balance reaches zero. The function must never mutate its input.
+
+Audience: you are writing for a senior fintech frontend/full-stack engineer who will review this as production state-machine code. They already know TypeScript discriminated unions and double-entry accounting, so do not explain language features or accounting basics.
+
+Constraints:
+- Money is integer centavos only, as a branded type `type Centavos = number & { readonly __brand: 'Centavos' }` (₱1,050.00 = 105000). No floating-point currency math anywhere.
+- Every repayment produces a double-entry journal entry whose lines satisfy Σ debits === Σ credits in centavos, using the accounts `wallet_clearing:gcash` or `wallet_clearing:maya`, `loans_receivable:<borrowerId>`, and `interest_income`. A repayment is split into a principal portion and an interest portion.
+- Every mutation carries an `Idempotency-Key`; replaying the same key returns the original result without posting a second journal entry.
+- Every mutation carries an `If-Match` loan version. A stale version returns `{ ok: false, status: 409, code: 'VERSION_MISMATCH' }` and an illegal transition returns `{ ok: false, status: 409, code: 'ILLEGAL_TRANSITION' }`. Never throw for these cases.
+- Named exports only (no `export default`), zero `any`, TypeScript `strict: true`.
+
+Verification requirements:
+1. Include an invariant verification table listing each invariant, where the code enforces it, and which test proves it.
+2. Include a Vitest test file with executable assertions proving that:
+   (a) Σ debits === Σ credits in integer centavos for every journal entry, including a final repayment split into principal and interest (e.g. ₱1,050.00 = 100000 principal + 5000 interest);
+   (b) replaying the same `Idempotency-Key` returns `replayed: true` and does not post a second journal entry;
+   (c) a stale `If-Match` version and an illegal transition each return a 409 result.
+3. Before finishing, check your implementation against every test and fix any mismatch you find.
+```
+
+</details>
 
 **Representative output excerpt** (full: [`run-5-verification.md`](./prompt-ladder/run-5-verification.md)).
 The test that matches the One Action, word for word:
