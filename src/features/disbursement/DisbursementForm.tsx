@@ -261,7 +261,7 @@ export function DisbursementForm({
       onChange: handleChange(field),
       'aria-invalid': error !== undefined,
       'aria-describedby': error === undefined ? `${fieldId(field)}-hint` : `${fieldId(field)}-error ${fieldId(field)}-hint`,
-      className: `${controlClass} ${error === undefined ? 'border-slate-600' : 'border-rose-400'}`,
+      className: `${controlClass} ${error === undefined ? 'border-slate-500' : 'border-rose-400'}`,
     }
   }
 

@@ -134,7 +134,7 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
 
   const input =
     'w-full rounded-md border bg-slate-950 px-3 py-2 text-slate-100 focus:ring-2 focus:ring-emerald-400 focus:outline-none'
-  const border = (invalid: boolean): string => (invalid ? 'border-rose-400' : 'border-slate-600')
+  const border = (invalid: boolean): string => (invalid ? 'border-rose-400' : 'border-slate-500')
   const submit =
     'rounded-md px-4 py-2 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60'
 

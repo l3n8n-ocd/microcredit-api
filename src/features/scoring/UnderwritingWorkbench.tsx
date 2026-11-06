@@ -153,7 +153,7 @@ export function UnderwritingWorkbench({
             }}
             aria-invalid="false"
             aria-describedby={`${searchHintId} ${countId}`}
-            className="w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+            className="w-full rounded-md border border-slate-500 bg-slate-950 px-3 py-2 text-slate-100 focus:ring-2 focus:ring-emerald-400 focus:outline-none"
           />
           <p id={searchHintId} className="text-xs text-slate-300">
             e.g. Liza or L-1044. The list updates when you stop typing.

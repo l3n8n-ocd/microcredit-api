@@ -66,7 +66,7 @@ Rules that follow from the table:
 | Token | `src/` class today | Note |
 | --- | --- | --- |
 | `obsidian` / `card` | `bg-slate-950` / `bg-slate-900/60` | Same family, slightly different shade |
-| `line` / `field` | `border-slate-800` / `border-slate-600` | `border-slate-600` (`#475569`) is 2.56:1. **TODO:** raise input borders to `slate-500` (`#64748B`, 4.08:1). |
+| `line` / `field` | `border-slate-800` / `border-slate-500` | Tailwind v4's `slate-500` renders as `#62748E`, 2 units from `field`. Measured in Chromium, all 10 inputs, selects and the search box clear 3:1 (WCAG 1.4.11), from 3.74:1 to 4.23:1 against their fill and surroundings. They were `slate-600` (below 3:1) until this fix, and `src/App.contrast.test.tsx` fails if one goes back. |
 | `ink` / `muted` | `text-slate-100` / `text-slate-300` | Same family |
 | `ok` | `emerald-400` / `emerald-500` | Same meaning: success, balanced ledger |
 | `fail` | `rose-300`–`rose-950` | Same meaning: 409, 422, field errors |
@@ -265,5 +265,4 @@ The fonts are not bundled by this block. Load them with the budget in Rule 1, fo
 | Voice Card check on this file | `grep` for the banned words prints nothing. |
 
 **Not done yet (TODO):** the portfolio site itself is not built, so these tokens are not on a live page
-yet. The terminal screenshots are not captured. The demo's input borders are still `slate-600`
-(2.56:1).
+yet. The terminal screenshots are not captured.
