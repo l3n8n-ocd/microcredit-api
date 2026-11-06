@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 240">
+  <rect width="480" height="240" fill="#F8FAFC"/>
+  <g stroke="#1E293B" stroke-width="1" opacity="0.15">
+    <path d="M0 40H480M0 80H480M0 120H480M0 160H480M0 200H480"/>
+    <path d="M60 0V240M300 0V240M390 0V240"/>
+  </g>
+  <path d="M300 0V240M390 0V240" stroke="#1E293B" stroke-width="2" opacity="0.3"/>
+  <text x="318" y="28" font-family="JetBrains Mono" font-size="12" fill="#1E293B" opacity="0.5">DR</text>
+  <text x="408" y="28" font-family="JetBrains Mono" font-size="12" fill="#1E293B" opacity="0.5">CR</text>
+  <circle cx="300" cy="120" r="4" fill="#059669"/>
+  <circle cx="390" cy="120" r="4" fill="#059669"/>
+  <text x="318" y="232" font-family="JetBrains Mono" font-size="12" fill="#059669">Σ = Σ</text>
+</svg>

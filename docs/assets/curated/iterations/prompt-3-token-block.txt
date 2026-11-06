@@ -1,0 +1,14 @@
+Same 4 assets as prompt 2. Obey this token block exactly; check-style-lock.py rejects anything else.
+
+STYLE LOCK (docs/IDENTITY_KIT.md)
+- Colours: #F8FAFC (background rect only), #1E293B (every line), #059669 (invariant nodes only).
+  #0F172A is reserved for text, and there is no text in these assets.
+- Line art: every path, line, rect and circle outline is stroke="#1E293B" stroke-width="1.5"
+  fill="none" vector-effect="non-scaling-stroke", so the line stays 1.5 px at any display size.
+  stroke-linecap="round" stroke-linejoin="round".
+- Invariant nodes: filled #059669 circles, r="2.5", no stroke. One to three per asset, placed where
+  something is proven: a balanced entry, the single accepted request, the stopped trace, the verified pin.
+- Hero texture only: lines at stroke-opacity="0.18", so it frames the page and never competes with it.
+- Banned: <text>, gradients, filters, <image>, drop shadows, 3D, perspective, any other colour or width.
+- Grid: icons use viewBox="0 0 48 48" with 6-unit margins. The hero uses viewBox="0 0 480 240" on a
+  24-unit ledger grid with a DR | CR column pair.

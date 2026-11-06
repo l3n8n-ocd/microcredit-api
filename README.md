@@ -223,6 +223,15 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **4 colours:** `#F8FAFC`, `#0F172A`, `#1E293B` and `#059669`, with measured contrast ratios.
   - **Favicon:** the `LA.` monogram, outlined from Plus Jakarta Sans Bold, at [`public/favicon.svg`](./public/favicon.svg).
   - **Style note:** two lines, also in [`CLAUDE.md` §9.4](./CLAUDE.md#94-identity-kit-style-note).
+- **Kill Your Darlings: Curate Your Images · Week 3 General AI Fluency:** [`docs/CURATE_YOUR_IMAGES.md`](./docs/CURATE_YOUR_IMAGES.md) · images in [`docs/assets/curated/`](./docs/assets/curated/)
+  - **Real captures:** 4 Playwright captures of the real app and test run: the `Idempotency-Key` / `If-Match`
+    preview, a `201 Idempotent replay` and a `409 VERSION_MISMATCH` over a balanced ledger, the trust score
+    and repayment split, and `248 passed`.
+  - **Generated connective tissue:** 4 line-art SVGs, held to one style by a checker script (Iteration 2
+    drafts: 35 violations; keepers: 0).
+  - **Killed darling:** the Week 1 neon isometric illustration. It inverts the light palette and fakes
+    the evidence it decorates.
+  - **Bio slot:** reserved for a real photo (TODO).
 
 ## License
 

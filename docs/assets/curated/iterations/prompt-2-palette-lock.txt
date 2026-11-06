@@ -1,0 +1,7 @@
+Create 4 SVG line-art assets for a fintech engineering portfolio:
+1. a subtle double-entry ledger grid texture for the hero background;
+2. an icon for Case 1, MicroCredit API: idempotent loan disbursement (state machine + lock);
+3. an icon for Case 2, Node2Shell CVE-2026-111497: a trace into an isolated container;
+4. an icon for Case 3, RoadWatch: a verified road-incident report with a geotag pin.
+Use only these colours: #F8FAFC background, #0F172A, #1E293B for lines, #059669 for the accent.
+Calm and technical. No gradients, no neon, no 3D.
