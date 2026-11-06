@@ -25,13 +25,13 @@ notes. The bio slot below lives inside `/#flagship-proof`.
 | Case 1 icon | [`kit-02-icon-idempotency-lock.svg`](./assets/curated/kit-02-icon-idempotency-lock.svg) | **Generated Connective Tissue** | Section marker: a lock holding one `APPROVED → DISBURSED` step | A 48 px marker. It labels the case and proves nothing. |
 | "Also shipped" · Node2Shell | [`kit-03-icon-sandbox-trace.svg`](./assets/curated/kit-03-icon-sandbox-trace.svg) + link to the [advisory](https://docs.google.com/document/d/1tzEqUoyXrR5_RpeszSFKZX4LhVh_PnoSsjsf9wpNtJo/view) | **Generated Connective Tissue** | One-line strip marker: a trace stopped inside an isolated container | The advisory is the evidence and it's linked. **TODO:** a real capture of the `node:24.22.0` vs `24.22.1` PoC output (`HTTP 400`) from the lab. |
 | "Also shipped" · RoadWatch | [`kit-04-icon-geotag-dispatch.svg`](./assets/curated/kit-04-icon-geotag-dispatch.svg) + link to the [repo](https://github.com/l3n8n-ocd/roadwatch) | **Generated Connective Tissue** | One-line strip marker: a verified pin on a road | **TODO:** a real Flutter app screenshot from the RoadWatch repo. |
-| Bio · "Why I build this way" (former `/about`) | `real-photo-lenon.jpg` (**you supply it; it is not in the repo yet**) | **Real Photo** | Puts a face next to the three first-person notes in `FRAME_IT_AS_CASES.md` §4 | See "The Real Photo call" below |
+| Bio · "Why I build this way" (former `/about`) | [`real-photo-lenon.jpg`](./assets/curated/real-photo-lenon.jpg) | **Real Photo** | Puts a face next to the three first-person notes in `FRAME_IT_AS_CASES.md` §4 | See "The Real Photo call" below |
 | `/#act` Contact CTA | No image. The `LA.` monogram ([`public/favicon.svg`](../public/favicon.svg)) sits in the header only. | **None, on purpose** | One emerald "Book a 15-min code walkthrough" button and a `mailto:` fallback | Any image here pulls the eye away from the one action. |
 
 **Count:**
-- **Real:** 4 captures, plus the photo once you add it, so 5.
+- **Real:** 5 — 4 captures of the app and test run, plus Lenon's headshot.
 - **Generated:** 4 small connective assets, none of which is evidence.
-- **To add:** 2 more real captures (Node2Shell and RoadWatch) would replace "TODO" with evidence.
+- **Still linked, not captured:** Node2Shell and RoadWatch stay as linked evidence, not screenshots. Why, in [Section 4](#the-two-slots-i-did-not-fake-node2shell-and-roadwatch).
 
 ### The Real Photo call (bio slot)
 
@@ -45,8 +45,10 @@ The subject of this slot is Lenon. Only a real photo can show a real person.
 - **The best choice is a working photo.** For example, you leading or presenting at an AWS Student
   Builder Group or BulSU MSC session, if such a photo exists. It shows the team communication that the
   RoadWatch case claims. A plain, well-lit headshot is the fallback.
-- **TODO (Lenon):** add the photo as `docs/assets/curated/real-photo-lenon.jpg`: cropped to the face and
-  shoulders, at least 800 px, with no filters. Nothing was generated for this slot.
+**The photo is in the repo:** [`real-photo-lenon.jpg`](./assets/curated/real-photo-lenon.jpg), a
+1130×1130 head-and-shoulders headshot Lenon supplied. Nothing was generated for this slot.
+
+<img src="./assets/curated/real-photo-lenon.jpg" width="200" alt="Lenon D. Adriano, head-and-shoulders headshot">
 
 ---
 
@@ -90,8 +92,9 @@ Under it, the repayment panel shows:
 - the ledger line after a posted `₱1,000.00` repayment;
 - a second `₱1,050.00` split previewed as `₱1,000.00 + ₱50.00`, with `If-Match: "5"`.
 
-*Flaw kept, not hidden:* JetBrains Mono's ligatures draw `===` as one long bar in the ledger line. The fix
-is `font-variant-ligatures: none` on monospace text (TODO).
+*Legibility fix applied:* JetBrains Mono's ligatures first drew `===` as one long bar in the ledger
+line. `font-variant-ligatures: none` on monospace text (`src/index.css`) now renders the three equals
+signs separately, and this capture was retaken after the fix.
 
 ![Trust score breakdown for L-1044 and the repayment panel with a balanced ledger and a principal/interest split](./assets/curated/real-03-scoring-and-repayment-ledger.png)
 
@@ -198,10 +201,26 @@ every real screen on the page suspect.
 
 ### Rejection 3 · An AI avatar or stylized portrait for the bio slot
 
-**Rejected by rule; none was generated.** The subject is Lenon, so the slot takes a real photo
-(Section 1). A stylized AI portrait would be the one invented face on a page whose claim is "nothing here
-is invented". It also risks the uncanny-valley distrust a fintech reviewer is trained to act on. **TODO:**
-the real photo.
+**Rejected by rule; none was generated.** The subject is Lenon, so the slot takes his real photo,
+[`real-photo-lenon.jpg`](./assets/curated/real-photo-lenon.jpg), now in the repo. A stylized AI portrait
+would be the one invented face on a page whose claim is "nothing here is invented". It also risks the
+uncanny-valley distrust a fintech reviewer is trained to act on.
+
+### The two slots I did not fake: Node2Shell and RoadWatch
+
+The brief asked for real captures of these two. I did **not** produce them, because neither can be a
+real, correctly-attributed capture from this environment, and a generated or borrowed one would be the
+exact "darling" this assignment grades against.
+
+| Slot | Why no capture was made | What stands in instead |
+| --- | --- | --- |
+| **Node2Shell PoC output** (`HTTP 400` from the patched runtime) | The output only exists if the differential PoC runs in the isolated Docker lab from the advisory. That lab is not in this repo, and running exploit PoC code here is out of scope. A rendered "terminal" of invented `HTTP 400` output would be fabricated evidence. | The public [advisory](https://docs.google.com/document/d/1tzEqUoyXrR5_RpeszSFKZX4LhVh_PnoSsjsf9wpNtJo/view), which already documents the `node:24.22.0` vs `24.22.1` result, plus `kit-03-icon-sandbox-trace.svg`. |
+| **RoadWatch app screenshot** | Lenon's own work is the **Flutter Android app**, which needs the APK on an emulator this environment can't run. The live site [roadwatch-ph.me](https://www.roadwatch-ph.me) is the **web dashboard a teammate built**, so capturing it would credit someone else's work to Lenon, which the case study explicitly refuses (`FRAME_IT_AS_CASES.md` §2). | The [repo](https://github.com/l3n8n-ocd/roadwatch) and the [APK release](https://github.com/l3n8n-ocd/roadwatch/releases/latest) Lenon ships, plus `kit-04-icon-geotag-dispatch.svg`. |
+
+**To turn these into real captures, Lenon captures them on his own machine:** run the Node2Shell lab and
+screenshot the patched runtime's `HTTP 400`; run the RoadWatch APK on an Android emulator and screenshot
+the Reporter flow. Both are then real and correctly attributed. Until then, a link to the real artifact
+beats a screenshot of the wrong thing.
 
 ---
 
@@ -220,3 +239,5 @@ the real photo.
 | Style lock | Keepers 4/4 PASS. Iteration 2 drafts: 35 violations. |
 | Darling pixel check (Pillow, 480×270 sample) | 92.3% of pixels within 24 RGB units of a kit colour (dark ink and slate); mean luminance 27/255; cyan 0.15%. |
 | Palette in `real-04` | Only `#0F172A`, `#1E293B`, `#F8FAFC` and `#059669`. A first render used off-kit `#34D399` and `#94A3B8` and was redone. |
+| `real-03` ligature | Retaken after `font-variant-ligatures: none`; `===` now renders as three equals signs, confirmed by eye on the cropped ledger line. |
+| Bio photo | `real-photo-lenon.jpg` present, 1130×1130, 93 KB. Supplied by Lenon; nothing generated. |
