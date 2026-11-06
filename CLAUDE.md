@@ -263,6 +263,32 @@ for the 10-week program, not only as a code generator.
    relaxes strict TypeScript, integer-centavo math, idempotency keys,
    accessibility, or Conventional Commits.
 
+### 9.3 Standing Voice Card
+
+> **Voice Card:** "Direct, technical, plainspoken, concrete, zero buzzwords."
+
+This applies to every portfolio paragraph, case study, README blurb and sitemap line, in this repo
+and in the Claude Project.
+
+<!-- voice-check:off -->
+1. **Banned filler:** "results-driven", "passionate", "seamless", "cutting-edge", "leveraged" (any
+   form of "leverage"), "synergy", "robust". Rewrite the sentence; don't swap in a synonym.
+<!-- voice-check:on -->
+2. **Name the real thing.** Every paragraph names at least one actual state transition
+   (`APPROVED → DISBURSED`), HTTP header (`Idempotency-Key`, `If-Match`), integer-centavo invariant
+   (`Σ debits === Σ credits`, `₱1.00 = 100`) or concrete file path (`src/utils/money.ts`).
+3. **One breath.** Read each sentence out loud. If you can't say it in one breath, split it or cut it.
+4. **Claims follow evidence** (§9.2 rule 4). Copy states only what the code, tests, deployment or a
+   public link shows. Anything else is marked TODO.
+
+*Check:* this prints nothing. Lines that quote the banned words on purpose (the rule above, the
+"Before" column in `docs/FRAME_IT_AS_CASES.md`) sit between `voice-check:off` / `voice-check:on`
+markers:
+
+```bash
+sed '/voice-check:off/,/voice-check:on/d' docs/FRAME_IT_AS_CASES.md | grep -niwE 'results-driven|passionate|seamless|cutting-edge|leverag(e|ed|es|ing)|synergy|robust'
+```
+
 ---
 
 ## 10. Claude Project Custom Instructions & FL-02 → FL-04 Target Tasks
@@ -286,6 +312,12 @@ TONE PREFERENCES
 - Prefer concrete code, tables, and checklists over prose.
 - Give one recommendation with the trade-off, not a survey of options.
 - Say plainly when you are unsure or when something can't be verified.
+
+VOICE CARD (portfolio and case-study copy)
+- "Direct, technical, plainspoken, concrete, zero buzzwords."
+- Never write: results-driven, passionate, seamless, cutting-edge, leveraged, synergy, robust.
+- Every paragraph names a real state transition, HTTP header, centavo invariant or file path.
+- Every sentence must read naturally out loud in one breath.
 
 CURRENT GOALS
 1. Ship MicroCredit API (github.com/l3n8n-ocd/microcredit-api) for the FlyRank

@@ -179,6 +179,10 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   each type-checked and behavior-probed. It includes an honest regression (the JSON output format) and
   a reusable, placeholder-based prompt template. Raw outputs and the measurement harness are in
   [`docs/prompt-ladder/`](./docs/prompt-ladder/).
+- **Frame It as Cases: Work That Speaks for Itself (Week 2 · General AI Fluency):**
+  [`docs/FRAME_IT_AS_CASES.md`](./docs/FRAME_IT_AS_CASES.md) has the standing Voice Card, the interview
+  log that came before any drafting, three framed cases (MicroCredit API, Node2Shell, RoadWatch), the
+  sitemap copy, and a before/after edit table.
 
 ## License
 

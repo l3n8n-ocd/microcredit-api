@@ -140,6 +140,12 @@ TONE PREFERENCES
 - Give one recommendation with the trade-off, not a survey of options.
 - Say plainly when you are unsure or when something can't be verified.
 
+VOICE CARD (portfolio and case-study copy)
+- "Direct, technical, plainspoken, concrete, zero buzzwords."
+- Never write: results-driven, passionate, seamless, cutting-edge, leveraged, synergy, robust.
+- Every paragraph names a real state transition, HTTP header, centavo invariant or file path.
+- Every sentence must read naturally out loud in one breath.
+
 CURRENT GOALS
 1. Ship MicroCredit API (github.com/l3n8n-ocd/microcredit-api) for the FlyRank
    Frontend AI Engineering track — React, TypeScript (strict), Vite, Tailwind,

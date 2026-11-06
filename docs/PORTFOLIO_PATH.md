@@ -163,7 +163,15 @@ flowchart TD
     H["1 · / — Hero: Claim + LIVE proof above the fold<br/>Double-click Disburse preview: Idempotency-Key + If-Match reject the 2nd payout<br/>Primary CTA: Book a 15-min code walkthrough · secondary: View repo"]
     H -->|believes in ~5s| X
     H -->|wants depth| F
-    F["2 · /#flagship-proof — MicroCredit API deep dive<br/>Code receipts: transition(), centavo utils + tests, CI badge<br/>Inline 'why it's built this way' annotations"]
+    F["2 · /#flagship-proof — MicroCredit API deep dive<br/>Code receipts: transition(), centavo utils + tests, CI badge<br/>Inline 'why it's built this way' annotations<br/>Also shipped: RoadWatch · Node2Shell advisory (both linked)"]
     F --> X["3 · /#act — Book 15-min code walkthrough<br/>Booking link · mailto fallback · role / timezone / availability"]
     X --> D([✅ Walkthrough booked])
 ```
+
+> **Update (2026-11-06): supporting proof is back, with public links.** It was removed on 2026-11-05
+> because it had no public evidence. Both pieces now have it, so the flagship ends with a one-line
+> "Also shipped" strip:
+> - [RoadWatch](https://github.com/l3n8n-ocd/roadwatch): public repo, deployed and demoed.
+> - The [Node2Shell (CVE-2026-111497) advisory](https://docs.google.com/document/d/1tzEqUoyXrR5_RpeszSFKZX4LhVh_PnoSsjsf9wpNtJo/view).
+>
+> Framed copy for every section is in [`FRAME_IT_AS_CASES.md`](./FRAME_IT_AS_CASES.md).
