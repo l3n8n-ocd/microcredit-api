@@ -185,6 +185,11 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   [`docs/FRAME_IT_AS_CASES.md`](./docs/FRAME_IT_AS_CASES.md) has the standing Voice Card, the interview
   log that came before any drafting, three framed cases (MicroCredit API, Node2Shell, RoadWatch), the
   sitemap copy, and a before/after edit table.
+- **FL-02 · Prompting Fundamentals on Real Tasks v2:** [`docs/FL-02_PROMPTING_FUNDAMENTALS.md`](./docs/FL-02_PROMPTING_FUNDAMENTALS.md)
+  turns synthetic security notes into an advisory across 6 prompt versions (naive, then Role, Context,
+  Few-Shot, Output Structure, Step Decomposition). It covers 11 real runs on two Claude models, each
+  measured for leaked secrets, sections and CVSS, plus a reusable template. Evidence is in
+  [`docs/fl-02/`](./docs/fl-02/).
 
 ## License
 
