@@ -4,6 +4,13 @@
 
 > Alternative Credit Scoring & Micro-Lending Portal
 
+**Live demo: [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app)**.
+Double-click **Disburse** and only one request is sent. Then use **Simulate
+double-click / network retry** to send the same request twice: the second one is
+replayed (same `Idempotency-Key`) or rejected with `409` (stale `If-Match`), and the
+ledger posts the payout once. The demo runs against an in-memory mock API, so
+state resets when you reload the page.
+
 ## Problem Statement
 
 Millions of Filipino micro-entrepreneurs — sari-sari store owners, market
@@ -40,7 +47,7 @@ act on.
 | Loan state machine | 🟡 Partial: 5 of the 10 states below (`APPLIED` → `DISBURSED` / `REJECTED`) |
 | Double-entry ledger | 🟡 Partial: disbursement journal entries only; repayments and reversals not built |
 | Credit scoring | ⬜ Designed, not yet implemented |
-| Deployed demo | ⬜ Not deployed yet |
+| Deployed demo | ✅ [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app) (Vercel, imported from `main`; mock API, no real wallet payouts) |
 
 ## Loan Lifecycle State Machine
 
