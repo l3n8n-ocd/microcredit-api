@@ -43,6 +43,9 @@ def extract(md_text: str) -> tuple[dict[str, str], str]:
         obj = json.loads(as_json.group(1))
         files = {"types.ts": obj["typesCode"], "stateMachine.ts": obj["stateMachineCode"], "ledger.ts": obj["ledgerCode"]}
         return files, obj.get("complexityAnalysis", "")
+    named = re.findall(r"### `([\w.\-]+)`\s*\n+```(?:ts|typescript)\n(.*?)\n```", body, re.S)
+    if named:  # Run 0 control: the model attached named files
+        return {name: code + "\n" for name, code in named}, body.split("\n### `", 1)[0]
     blocks = re.findall(r"```(?:ts|typescript)\n(.*?)```", body, re.S)
     tests = [b for b in blocks if "from 'vitest'" in b]
     impl = [b for b in blocks if b not in tests]
@@ -70,15 +73,33 @@ def measure(run_md: Path, work: Path) -> dict[str, object]:
     tsc = subprocess.run([str(TSC), "-p", str(d / "tsconfig.json")], capture_output=True, text=True)
 
     probe = PROBES / f"{run_md.stem}.test.ts"
-    tests = "—"
-    if probe.exists() or any(n.endswith(".test.ts") for n in files):
+    vitest_files = [n for n, c in files.items() if n.endswith(".test.ts") and "from 'vitest'" in c]
+    node_tests = [n for n, c in files.items() if n.endswith(".test.ts") and "node:test" in c]
+    results = []
+    if node_tests:  # model wrote node:test tests: emit with plain `strict` (its own claim) and run them
+        emit = {"compilerOptions": {"target": "es2023", "lib": ["ES2023"], "module": "nodenext",
+                                    "moduleResolution": "nodenext", "strict": True, "skipLibCheck": True,
+                                    "types": ["node"], "typeRoots": [str(ROOT / "node_modules" / "@types")],
+                                    "outDir": "out"}, "include": sorted(files)}
+        (d / "tsconfig.emit.json").write_text(json.dumps(emit), encoding="utf-8")
+        built = subprocess.run([str(TSC), "-p", str(d / "tsconfig.emit.json")], capture_output=True, text=True)
+        out = [str(d / "out" / n.replace(".ts", ".js")) for n in node_tests]
+        ran = subprocess.run(["node", "--test", *out], capture_output=True, text=True)
+        passed = re.search(r"^# pass (\d+)", ran.stdout, re.M)
+        total = re.search(r"^# tests (\d+)", ran.stdout, re.M)
+        plain = sum(1 for line in built.stdout.splitlines() if "error TS" in line)
+        results.append(f"node:test {passed.group(1) if passed else '?'}/{total.group(1) if total else '?'} "
+                       f"(plain-strict tsc errors: {plain})")
+    if probe.exists() or vitest_files:
         if probe.exists():
             (d / "probe.test.ts").write_text(probe.read_text(encoding="utf-8"), encoding="utf-8")
         os.symlink(ROOT / "node_modules", d / "node_modules")
+        include = json.dumps(vitest_files + (["probe.test.ts"] if probe.exists() else []))
         (d / "vitest.config.mjs").write_text(
-            "export default { test: { include: ['*.test.ts'], environment: 'node' } }\n", encoding="utf-8")
+            f"export default {{ test: {{ include: {include}, environment: 'node' }} }}\n", encoding="utf-8")
         run = subprocess.run([str(VITEST), "run", "--root", str(d)], capture_output=True, text=True, cwd=ROOT)
-        tests = vitest_summary(run.stdout + run.stderr)
+        results.append(vitest_summary(run.stdout + run.stderr))
+    tests = "; ".join(results) if results else "—"
 
     return {
         "Run": run_md.stem,
@@ -93,7 +114,7 @@ def measure(run_md: Path, work: Path) -> dict[str, object]:
         "Our 10 states named": sum(1 for s in STATES if re.search(rf"['\"]{s}['\"]", code)),
         "Model's own tests": sum(1 for n in files if n.endswith(".test.ts")),
         "Prose words": len(re.sub(r"[#>*|`-]", " ", prose).split()),
-        "Vitest (model tests + our probe)": tests,
+        "Tests run (model's own + our probe)": tests,
     }
 
 

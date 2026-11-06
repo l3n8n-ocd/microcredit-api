@@ -38,10 +38,10 @@ table at the end shows how each number was produced.
   - The subagents may have received this repo's `CLAUDE.md` despite the instruction to ignore it. The
     baseline's unprompted use of integer money hints at either strong model defaults or leakage. It
     used **USD cents and `en-US`**, not centavos, which points to defaults rather than copying.
-  - **TODO, pending control run:** the Run 0 prompt will be re-run once in a fresh claude.ai chat,
-    outside this repository *and* outside the FlyRank Claude Project (whose instructions also mention
-    centavos). If that output also uses integer money and idempotency keys, they are model defaults;
-    if not, the subagent runs were influenced by this repo's context.
+  - **Control run (done):** the Run 0 prompt was re-run in a fresh claude.ai chat, outside this
+    repository and outside the FlyRank Claude Project. It **also** used integer money and
+    payment-ID idempotency without being asked, so those are model defaults, not leakage from
+    `CLAUDE.md`. See [Run 0 control](#run-0-control-the-same-prompt-outside-this-repository).
 - **The brief vs. reality.** The assignment brief predicted specific outputs, such as a 30-line float
   `class Loan` for Run 0 and four states silently dropped in Run 4. Several predictions did **not**
   happen. Each run below says where reality differed, and the notes describe what actually happened.
@@ -107,6 +107,32 @@ export class LoanService {
 > `balance -= payment * 1.05`, a `'pending' | 'paid'` status and a beginner TypeScript tutorial. The
 > real baseline had **none** of those. A modern model's defaults are much better than that, so the
 > real lesson of Run 0 is subtler: plausible-looking code can still have a loan-mixing idempotency bug.
+
+### Run 0 control: the same prompt outside this repository
+
+To check whether the subagent baseline was influenced by this repo's `CLAUDE.md`, I re-ran the
+**identical prompt** in a fresh claude.ai chat, outside the repo and outside the FlyRank Claude Project.
+That chat could run code, so it returned files plus a summary. Full output:
+[`run-0-control.md`](./prompt-ladder/run-0-control.md).
+
+| Check | Subagent baseline (Run 0) | claude.ai control | Verdict |
+| ----- | ------------------------- | ----------------- | ------- |
+| Integer money | ✅ `Cents` (branded), USD / `en-US` | ✅ `Cents = number` (unbranded), "centavos", `₱` | **Model default.** Both did it unprompted. |
+| Idempotency | Global map that ignores the payload. The same key on another loan returns the first loan's payment. | Per loan, compares the payload. A reused ID with different details throws `DUPLICATE_PAYMENT`. | Default in both. The control's version is **safer** (probe: cross-loan bug absent). |
+| `version` / `If-Match` | ✅ Version check (throws on mismatch) | ❌ **None.** Two writers from one snapshot silently lose a payment (probe). | Not a default. Concurrency only appears when asked (Run 3). |
+| Purity / typed errors | ❌ Mutates in place; throws | ❌ Mutates in place; throws `LoanError` | Same weakness in both. |
+| Our 10 states | 7 of 10 | 5 of 10 (`PENDING`, `ACTIVE`, `PAID_OFF` and `WRITTEN_OFF` instead) | Both invent their own lifecycle. |
+| Its own claims | No tests | "13 tests … all pass under strict TypeScript". **True:** 13/13 pass, 0 errors under plain `strict`. Under this repo's extra flags: 10 errors in `loan.ts` and 19 in its tests, all `noUncheckedIndexedAccess`. | A claim that holds against *its* bar, not ours. |
+
+**Answer to the leakage question:** integer money and some form of idempotency appeared in **both**
+environments, so they're model defaults, not copied from `CLAUDE.md`. Two other observations:
+
+- **The subagent probably didn't read `CLAUDE.md`.** It used **USD**, while `CLAUDE.md` says
+  centavos everywhere.
+- **The control may have had its own context.** The prompt never mentions the Philippines, yet the
+  control used `₱` and "centavos". Something in the claude.ai account, such as profile preferences,
+  memory or past chats, likely supplied that. I can't check which, so treat the control's currency
+  choice, but not its structure, as possibly context-influenced.
 
 ---
 
@@ -548,9 +574,10 @@ temporary directory:
 python3 -I docs/prompt-ladder/harness/measure.py
 ```
 
-| Run | Code lines | Longest line | Strict tsc errors | `any` | `export default` | `throw` | `/ 100` | Classes | Our 10 states named | Model's own tests | Prose words | Vitest (model tests + our probe) |
+| Run | Code lines | Longest line | Strict tsc errors | `any` | `export default` | `throw` | `/ 100` | Classes | Our 10 states named | Model's own tests | Prose words | Tests run (model's own + our probe) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | run-0-baseline | 423 | 100 | 0 | 0 | 0 | 9 | 1 | 3 | 7 | 0 | 264 | 4 passed (4) |
+| run-0-control | 613 | 120 | 10 | 0 | 0 | 8 | 0 | 2 | 5 | 1 | 349 | node:test 13/13 (plain-strict tsc errors: 0); 4 passed (4) |
 | run-1-goal | 187 | 105 | 0 | 0 | 0 | 3 | 0 | 0 | 10 | 0 | 280 | — |
 | run-2-audience | 278 | 117 | 0 | 0 | 0 | 2 | 0 | 0 | 10 | 0 | 357 | — |
 | run-3-constraints | 496 | 119 | 0 | 0 | 0 | 1 | 0 | 0 | 10 | 0 | 345 | 4 passed (4) |
@@ -568,5 +595,7 @@ python3 -I docs/prompt-ladder/harness/measure.py
   **does** mutate its input. Each probe test is named after what it checks.
 - **Run 4's 121 code lines** are measured after decoding the JSON strings. The response itself was 7
   physical lines.
+- **The Run 0 control** ran its own 13 `node:test` tests, compiled with plain `strict` as its reply
+  claimed. Its "Strict tsc errors" (10) use this repo's stricter flags, like every other row.
 - **Run 1 and Run 2 have no probe.** Their prompts didn't ask for idempotency or `If-Match`, so there
   is nothing to probe. Their gaps are visible in the code and noted above.
