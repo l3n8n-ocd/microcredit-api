@@ -190,8 +190,8 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
 - **FL-02 · Prompting Fundamentals on Real Tasks v2:** [`docs/FL-02_PROMPTING_FUNDAMENTALS.md`](./docs/FL-02_PROMPTING_FUNDAMENTALS.md)
   turns synthetic security notes into an advisory across 6 prompt versions (naive, then Role, Context,
   Few-Shot, Output Structure, Step Decomposition). It covers 11 real runs on two Claude models, each
-  measured for leaked secrets, sections and CVSS, plus a reusable template. Evidence is in
-  [`docs/fl-02/`](./docs/fl-02/).
+  measured for leaked secrets, sections and CVSS, plus a reusable template and 1 verification run of
+  that template (0/8 leaks). Evidence is in [`docs/fl-02/`](./docs/fl-02/).
 - **Week 3 · React App Development with AI:** [`docs/WEEK3_REACT_AI_DEVELOPMENT.md`](./docs/WEEK3_REACT_AI_DEVELOPMENT.md)
   - **Built:** an alt-data underwriting workbench (`UNDER_REVIEW → APPROVED` feeds the Disburse form), a
     repayment and compensating-reversal panel, and the full 10-state `LoanState` union. All of it sits
