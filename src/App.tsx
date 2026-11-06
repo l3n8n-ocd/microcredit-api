@@ -1,3 +1,5 @@
+import { DisbursementSettingsForm } from './features/loan-lifecycle/index.ts'
+
 export function App() {
   return (
     <main className="min-h-dvh bg-slate-950 px-4 py-12 text-slate-100 sm:px-8">
@@ -9,6 +11,7 @@ export function App() {
         <p className="mt-2 text-base text-slate-300">
           Alternative Credit Scoring &amp; Micro-Lending Portal
         </p>
+        <DisbursementSettingsForm />
       </div>
     </main>
   )
