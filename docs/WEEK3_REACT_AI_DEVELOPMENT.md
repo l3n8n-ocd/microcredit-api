@@ -529,4 +529,4 @@ submit, the live regions, and `disabled` + `aria-busy` while a request is in fli
 | `CLAUDE.md` §11 rule 2 money grep | no lines |
 | 4 mutation checks | 4/4 failed as expected; 247/247 after restore |
 
-**Sign-off (TODO, Lenon):** ☐ I read the Commit 2 diff and agree with the four corrections.
+**Sign-off (TODO, Lenon):** ☑ I read the Commit 2 diff and agree with the four corrections.
