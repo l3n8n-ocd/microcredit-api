@@ -4,6 +4,7 @@ import { LEGAL_TRANSITIONS, transitionLoan } from './loanStateMachine.ts'
 import type { LoanEvent, LoanState, LoanStatus } from './types.ts'
 
 const base = { id: 'L-1', borrowerId: 'borrower-1', version: 5 }
+const funded = { disbursedAmount: toCentavos(500000), provider: 'gcash', journalEntryId: 'JE-0001' } as const
 
 const LOANS: Readonly<Record<LoanStatus, LoanState>> = {
   APPLIED: { ...base, status: 'APPLIED' },
@@ -17,6 +18,11 @@ const LOANS: Readonly<Record<LoanStatus, LoanState>> = {
     journalEntryId: 'JE-0001',
   },
   REJECTED: { ...base, status: 'REJECTED', reason: 'score' },
+  CANCELLED: { ...base, status: 'CANCELLED', reason: 'offer expired' },
+  REPAYING: { ...base, ...funded, status: 'REPAYING', outstandingPrincipal: toCentavos(400000) },
+  SETTLED: { ...base, ...funded, status: 'SETTLED' },
+  DELINQUENT: { ...base, ...funded, status: 'DELINQUENT', outstandingPrincipal: toCentavos(400000) },
+  DEFAULTED: { ...base, ...funded, status: 'DEFAULTED', outstandingPrincipal: toCentavos(400000) },
 }
 
 const EVENTS: readonly LoanEvent[] = [
@@ -24,6 +30,12 @@ const EVENTS: readonly LoanEvent[] = [
   { type: 'APPROVE' },
   { type: 'REJECT', reason: 'score' },
   { type: 'DISBURSE', amount: toCentavos(500000), provider: 'maya', journalEntryId: 'JE-0002' },
+  { type: 'CANCEL', reason: 'offer expired' },
+  { type: 'POST_REPAYMENT', principal: toCentavos(100000) },
+  { type: 'REVERSE_REPAYMENT', principal: toCentavos(100000) },
+  { type: 'MARK_DELINQUENT' },
+  { type: 'CURE' },
+  { type: 'MARK_DEFAULTED' },
 ]
 
 const PAIRS = (Object.keys(LOANS) as LoanStatus[]).flatMap((status) =>
@@ -31,9 +43,9 @@ const PAIRS = (Object.keys(LOANS) as LoanStatus[]).flatMap((status) =>
 )
 
 describe('transitionLoan', () => {
-  it('covers all 5 × 4 (state, event) pairs, 4 legal and 16 illegal', () => {
-    expect(PAIRS).toHaveLength(20)
-    expect(PAIRS.filter((pair) => pair.legal)).toHaveLength(4)
+  it('covers all 10 × 10 (state, event) pairs, 12 legal and 88 illegal', () => {
+    expect(PAIRS).toHaveLength(100)
+    expect(PAIRS.filter((pair) => pair.legal)).toHaveLength(12)
   })
 
   it.each(PAIRS.filter((pair) => !pair.legal))('rejects $event.type from $status with a typed 409', ({ status, event }) => {
@@ -70,5 +82,42 @@ describe('transitionLoan', () => {
     const loan = { ...LOANS.UNDER_REVIEW }
     transitionLoan(loan, { type: 'APPROVE' })
     expect(loan).toEqual(LOANS.UNDER_REVIEW)
+  })
+
+  it('posts repayments DISBURSED → REPAYING → SETTLED, settling only at 0 principal owed', () => {
+    const first = transitionLoan(LOANS.DISBURSED, { type: 'POST_REPAYMENT', principal: toCentavos(300000) })
+    expect(first).toMatchObject({ ok: true, loan: { status: 'REPAYING', outstandingPrincipal: 200000, version: 6 } })
+    if (!first.ok) throw new Error('expected ok')
+    const last = transitionLoan(first.loan, { type: 'POST_REPAYMENT', principal: toCentavos(200000) })
+    expect(last).toMatchObject({ ok: true, loan: { status: 'SETTLED', disbursedAmount: 500000, version: 7 } })
+  })
+
+  it('settles DISBURSED in one posting when the repayment covers all principal', () => {
+    const result = transitionLoan(LOANS.DISBURSED, { type: 'POST_REPAYMENT', principal: toCentavos(500000) })
+    expect(result).toMatchObject({ ok: true, loan: { status: 'SETTLED' } })
+  })
+
+  it('rejects overpayment and over-reversal with a typed 422, not a negative balance', () => {
+    expect(transitionLoan(LOANS.REPAYING, { type: 'POST_REPAYMENT', principal: toCentavos(400001) })).toMatchObject({
+      ok: false,
+      status: 422,
+      code: 'INVALID_AMOUNT',
+    })
+    expect(transitionLoan(LOANS.REPAYING, { type: 'REVERSE_REPAYMENT', principal: toCentavos(100001) })).toMatchObject({
+      ok: false,
+      status: 422,
+      code: 'INVALID_AMOUNT',
+    })
+    expect(transitionLoan(LOANS.REPAYING, { type: 'POST_REPAYMENT', principal: toCentavos(0) })).toMatchObject({
+      ok: false,
+      status: 422,
+    })
+  })
+
+  it('reverses a repayment by restoring principal without changing REPAYING ⇄ DELINQUENT', () => {
+    expect(transitionLoan(LOANS.DELINQUENT, { type: 'REVERSE_REPAYMENT', principal: toCentavos(50000) })).toMatchObject({
+      ok: true,
+      loan: { status: 'DELINQUENT', outstandingPrincipal: 450000 },
+    })
   })
 })

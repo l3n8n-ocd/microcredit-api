@@ -1,14 +1,15 @@
 import { isCentavos, isUuidV4 } from '../../utils/index.ts'
-import { buildDisbursementJournal } from './ledger.ts'
+import { buildDisbursementJournal, buildRepaymentJournal, buildReversalJournal } from './ledger.ts'
 import { transitionLoan } from './loanStateMachine.ts'
 import type {
   DisbursementRequest,
   DisbursementResponse,
   JournalEntry,
+  LoanCommandRequest,
+  LoanCommandResponse,
   LoanEvent,
   LoanOf,
   LoanState,
-  TransitionResult,
 } from './types.ts'
 import { isDisbursableAmount, isValidReferenceNote, isWalletProvider, PH_MOBILE_PATTERN } from './validation.ts'
 
@@ -31,10 +32,12 @@ export interface DisbursementServer {
   disburse: (request: DisbursementRequest) => Promise<DisbursementResponse>
   listLoans: () => readonly LoanState[]
   getLedger: () => readonly JournalEntry[]
-  /** Applies a state-machine event to a loan (used by the underwriting workbench). */
-  applyEvent: (loanId: string, event: LoanEvent) => TransitionResult | null
-  /** Appends a journal entry (used by the repayment panel). */
-  appendEntry: (entry: JournalEntry) => void
+  /**
+   * In-memory stand-in for `POST /loans/:id/commands` (review decisions,
+   * repayments, reversals). Same check order as `disburse`: replay first,
+   * then validation, If-Match, the state machine, and one atomic commit.
+   */
+  command: (request: LoanCommandRequest) => Promise<LoanCommandResponse>
   reset: () => void
 }
 
@@ -47,6 +50,12 @@ interface StoredResult {
   readonly fingerprint: string
   readonly loan: LoanOf<'DISBURSED'>
   readonly journalEntry: JournalEntry
+}
+
+interface StoredCommand {
+  readonly fingerprint: string
+  readonly loan: LoanState
+  readonly journalEntry: JournalEntry | null
 }
 
 const ETAG = /^"(\d+)"$/
@@ -81,6 +90,11 @@ export function createDisbursementServer(
   let loans = new Map(seedLoans.map((loan) => [loan.id, loan]))
   let ledger: JournalEntry[] = []
   let results = new Map<string, StoredResult>()
+  let commandResults = new Map<string, StoredCommand>()
+
+  function nextEntryId(): string {
+    return `JE-${String(ledger.length + 1).padStart(4, '0')}`
+  }
 
   function commit(request: DisbursementRequest): DisbursementResponse {
     const key = request.headers['Idempotency-Key']
@@ -136,7 +150,7 @@ export function createDisbursementServer(
     }
 
     // 4. State machine.
-    const journalEntryId = `JE-${String(ledger.length + 1).padStart(4, '0')}`
+    const journalEntryId = nextEntryId()
     const transition = transitionLoan(loan, {
       type: 'DISBURSE',
       amount: body.amount,
@@ -174,6 +188,118 @@ export function createDisbursementServer(
     return { kind: 'CREATED', status: 201, loan: transition.loan, journalEntry }
   }
 
+  function runCommand(request: LoanCommandRequest): LoanCommandResponse {
+    const key = request.headers['Idempotency-Key']
+    const { body } = request
+    const print = JSON.stringify([request.headers['If-Match'], body])
+
+    if (!isUuidV4(key)) {
+      return { kind: 'BAD_REQUEST', status: 400, message: 'Idempotency-Key must be a UUID v4.' }
+    }
+
+    // 1. Idempotent replay, before If-Match (a retry carries the pre-commit version).
+    const stored = commandResults.get(key)
+    if (stored !== undefined) {
+      if (stored.fingerprint !== print) {
+        return {
+          kind: 'UNPROCESSABLE',
+          status: 422,
+          code: 'IDEMPOTENCY_KEY_REUSED',
+          message: 'This Idempotency-Key was already used with a different payload.',
+        }
+      }
+      return { kind: 'REPLAYED', status: 200, loan: stored.loan, journalEntry: stored.journalEntry }
+    }
+
+    // 2. Validation.
+    const etag = ETAG.exec(request.headers['If-Match'])
+    if (etag === null) {
+      return { kind: 'BAD_REQUEST', status: 400, message: 'If-Match must be a quoted version, e.g. "3".' }
+    }
+    const loan = loans.get(body.loanId)
+    if (loan === undefined) {
+      return { kind: 'NOT_FOUND', status: 404, message: `Loan ${body.loanId} not found.` }
+    }
+
+    // 3. Optimistic concurrency.
+    if (Number(etag[1]) !== loan.version) {
+      return {
+        kind: 'CONFLICT',
+        status: 409,
+        code: 'VERSION_MISMATCH',
+        message: `If-Match ${request.headers['If-Match']} is stale; loan ${loan.id} is at version ${loan.version}.`,
+        currentVersion: loan.version,
+      }
+    }
+
+    // 4. Build the event and its journal entry without touching state.
+    let event: LoanEvent
+    let journalEntry: JournalEntry | null = null
+    switch (body.type) {
+      case 'START_REVIEW':
+      case 'APPROVE':
+        event = { type: body.type }
+        break
+      case 'REJECT':
+        if (body.reasonCodes.length === 0) {
+          return { kind: 'UNPROCESSABLE', status: 422, code: 'INVALID_BODY', message: 'A rejection needs at least one reason code.' }
+        }
+        event = { type: 'REJECT', reason: body.reasonCodes.join(', ') }
+        break
+      case 'POST_REPAYMENT': {
+        const { principal, interest } = body.split
+        if (!isCentavos(principal) || !isCentavos(interest) || principal <= 0 || interest < 0) {
+          return { kind: 'UNPROCESSABLE', status: 422, code: 'INVALID_BODY', message: 'Repayment split must be whole centavos, principal > 0.' }
+        }
+        event = { type: 'POST_REPAYMENT', principal }
+        if (loan.status === 'DISBURSED' || loan.status === 'REPAYING') {
+          journalEntry = buildRepaymentJournal({ id: nextEntryId(), loan, split: body.split, idempotencyKey: key })
+        }
+        break
+      }
+      case 'REVERSE_REPAYMENT': {
+        const reversal = buildReversalJournal({
+          id: nextEntryId(),
+          ledger,
+          reversesEntryId: body.reversesEntryId,
+          idempotencyKey: key,
+        })
+        if (!reversal.ok) {
+          return { kind: 'UNPROCESSABLE', status: 422, code: reversal.code, message: reversal.message }
+        }
+        if (reversal.entry.loanId !== loan.id) {
+          return {
+            kind: 'UNPROCESSABLE',
+            status: 422,
+            code: 'NOT_REVERSIBLE',
+            message: `${body.reversesEntryId} belongs to loan ${reversal.entry.loanId}, not ${loan.id}.`,
+          }
+        }
+        event = { type: 'REVERSE_REPAYMENT', principal: reversal.principal }
+        journalEntry = reversal.entry
+        break
+      }
+      default: {
+        const unreachable: never = body
+        return unreachable
+      }
+    }
+
+    // 5. State machine: illegal pair → 409, bad amount → 422. Nothing is posted.
+    const transition = transitionLoan(loan, event)
+    if (!transition.ok) {
+      return transition.status === 409
+        ? { kind: 'CONFLICT', status: 409, code: 'ILLEGAL_TRANSITION', message: transition.message, currentVersion: loan.version }
+        : { kind: 'UNPROCESSABLE', status: 422, code: 'INVALID_AMOUNT', message: transition.message }
+    }
+
+    // 6. Commit: journal entry + new loan state + idempotency record, together.
+    if (journalEntry !== null) ledger = [...ledger, journalEntry]
+    loans = new Map(loans).set(loan.id, transition.loan)
+    commandResults = new Map(commandResults).set(key, { fingerprint: print, loan: transition.loan, journalEntry })
+    return { kind: 'APPLIED', status: 200, loan: transition.loan, journalEntry }
+  }
+
   return {
     disburse: async (request) => {
       await wait(latencyMs)
@@ -181,22 +307,15 @@ export function createDisbursementServer(
     },
     listLoans: () => [...loans.values()],
     getLedger: () => ledger,
-    applyEvent: (loanId, event) => {
-      const loan = loans.get(loanId)
-      if (loan === undefined) return null
-      const result = transitionLoan(loan, event)
-      if (result.ok) {
-        loans = new Map(loans).set(loanId, result.loan)
-      }
-      return result
-    },
-    appendEntry: (entry) => {
-      ledger = [...ledger, entry]
+    command: async (request) => {
+      await wait(latencyMs)
+      return runCommand(request)
     },
     reset: () => {
       loans = new Map(seedLoans.map((loan) => [loan.id, loan]))
       ledger = []
       results = new Map()
+      commandResults = new Map()
     },
   }
 }

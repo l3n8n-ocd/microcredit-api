@@ -1,317 +1,364 @@
-import { useState } from 'react'
-import { formatPHP, parsePesosToCentavos, toCentavos } from '../../utils/index.ts'
-import type { DisbursementServer, JournalEntry, LoanState } from '../disbursement/index.ts'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { createIdempotencyKey, formatPHP } from '../../utils/index.ts'
+import { formatIfMatch, type DisbursementServer, type LoanCommand, type LoanCommandResponse } from '../disbursement/index.ts'
+import { describeCommand, type Announcement } from './announcement.ts'
+import { APPLICANT_PROFILES, type ApplicantProfile } from './applicants.ts'
+import { RepaymentPanel } from './RepaymentPanel.tsx'
+import { MAX_SCORE, REASON_TEXT } from './scoreEngine.ts'
+import { QUEUE_FILTERS, useUnderwritingQueue, type QueueRow } from './useUnderwritingQueue.ts'
 
-interface Applicant {
-  borrowerId: string
-  name: string
-  utility: { provider: 'Meralco' | 'Water'; monthsOnTime: number; monthsObserved: number }
-  supplier: { invoicesPaid: number; invoicesTotal: number; avgDaysLate: number }
-  load: { topUpsPerMonth: number; monthsActive: number }
+export interface UnderwritingWorkbenchProps {
+  readonly server: DisbursementServer
+  /** Bumped by the Disburse form on the same screen after it changes the server. */
+  readonly revision?: number
+  /** Called after the workbench changes the server, so the Disburse form re-reads. */
+  readonly onServerChange?: () => void
+  /** Injectable for deterministic tests; defaults to crypto.randomUUID(). */
+  readonly createKey?: () => string
+  /** Search debounce. Defaults to 250 ms. */
+  readonly debounceMs?: number
+  readonly profiles?: readonly ApplicantProfile[]
 }
 
-const APPLICANTS: Applicant[] = [
-  {
-    borrowerId: 'borrower-42',
-    name: "Nena's Sari-Sari Store",
-    utility: { provider: 'Meralco', monthsOnTime: 12, monthsObserved: 12 },
-    supplier: { invoicesPaid: 23, invoicesTotal: 24, avgDaysLate: 1 },
-    load: { topUpsPerMonth: 9, monthsActive: 24 },
-  },
-  {
-    borrowerId: 'borrower-17',
-    name: "Kuya Ben's Carinderia",
-    utility: { provider: 'Meralco', monthsOnTime: 10, monthsObserved: 12 },
-    supplier: { invoicesPaid: 14, invoicesTotal: 16, avgDaysLate: 4 },
-    load: { topUpsPerMonth: 6, monthsActive: 18 },
-  },
-  {
-    borrowerId: 'borrower-08',
-    name: "Liza's Bigasan & Load",
-    utility: { provider: 'Water', monthsOnTime: 9, monthsObserved: 12 },
-    supplier: { invoicesPaid: 9, invoicesTotal: 12, avgDaysLate: 6 },
-    load: { topUpsPerMonth: 5, monthsActive: 10 },
-  },
-  {
-    borrowerId: 'borrower-05',
-    name: "Mang Tonyo's Hardware",
-    utility: { provider: 'Meralco', monthsOnTime: 5, monthsObserved: 8 },
-    supplier: { invoicesPaid: 3, invoicesTotal: 5, avgDaysLate: 12 },
-    load: { topUpsPerMonth: 3, monthsActive: 4 },
-  },
-  {
-    borrowerId: 'borrower-31',
-    name: "Rosa's Ukay-Ukay",
-    utility: { provider: 'Water', monthsOnTime: 3, monthsObserved: 9 },
-    supplier: { invoicesPaid: 2, invoicesTotal: 6, avgDaysLate: 21 },
-    load: { topUpsPerMonth: 2, monthsActive: 3 },
-  },
-]
-
-const INTEREST_RATE = 0.05
-
-type RepaymentStatus = 'REPAYING' | 'SETTLED' | 'DELINQUENT' | 'DEFAULTED'
+const NO_OP = (): void => {}
 
 export function UnderwritingWorkbench({
   server,
-  revision,
-  onServerChange,
-}: {
-  server: DisbursementServer
-  revision: number
-  onServerChange: () => void
-}) {
-  const [loans, setLoans] = useState<readonly LoanState[]>(server.listLoans())
-  const [ledger, setLedger] = useState<readonly JournalEntry[]>(server.getLedger())
-  const [filter, setFilter] = useState('ALL')
-  const [search, setSearch] = useState('')
-  const [selectedId, setSelectedId] = useState('')
-  const [message, setMessage] = useState('')
-  const [repayLoanId, setRepayLoanId] = useState('')
-  const [repayAmount, setRepayAmount] = useState('')
-  const [reverseId, setReverseId] = useState('')
-  const [repayments, setRepayments] = useState<Record<string, { status: RepaymentStatus; outstanding: number }>>({})
+  revision = 0,
+  onServerChange = NO_OP,
+  createKey = createIdempotencyKey,
+  debounceMs = 250,
+  profiles = APPLICANT_PROFILES,
+}: UnderwritingWorkbenchProps) {
+  const id = useId()
+  const queue = useUnderwritingQueue(server, { profiles, revision, onServerChange, debounceMs })
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [announcement, setAnnouncement] = useState<Announcement | null>(null)
 
-  const [seenRevision, setSeenRevision] = useState(revision)
-  if (revision !== seenRevision) {
-    setSeenRevision(revision)
-    setLoans(server.listLoans())
-    setLedger(server.getLedger())
-  }
-
-  function refresh() {
-    setLoans(server.listLoans())
-    setLedger(server.getLedger())
-    onServerChange()
-  }
-
-  function score(applicant: Applicant) {
-    const utilityPoints = Math.floor((350 * applicant.utility.monthsOnTime) / applicant.utility.monthsObserved)
-    const supplierPoints = Math.max(
-      0,
-      Math.floor((350 * applicant.supplier.invoicesPaid) / applicant.supplier.invoicesTotal) -
-        Math.min(applicant.supplier.avgDaysLate * 5, 100),
-    )
-    const loadPoints =
-      Math.floor((200 * Math.min(applicant.load.topUpsPerMonth, 8)) / 8) +
-      Math.floor((100 * Math.min(applicant.load.monthsActive, 12)) / 12)
-    const codes: string[] = []
-    if (applicant.utility.monthsOnTime / applicant.utility.monthsObserved < 0.8) codes.push('UTIL_LATE_PAYMENTS')
-    if (applicant.supplier.avgDaysLate > 7) codes.push('SUPPLIER_PAYS_LATE')
-    if (applicant.supplier.invoicesTotal < 6) codes.push('SUPPLIER_THIN_HISTORY')
-    if (applicant.load.topUpsPerMonth < 4) codes.push('LOAD_IRREGULAR')
-    if (applicant.load.monthsActive < 6) codes.push('LOAD_SHORT_HISTORY')
-    const total = utilityPoints + supplierPoints + loadPoints
-    let limit = 0
-    if (total >= 800) limit = 5_000_000
-    else if (total >= 700) limit = 2_500_000
-    else if (total >= 550) limit = 1_000_000
-    else if (total >= 400) limit = 500_000
-    return { total, utilityPoints, supplierPoints, loadPoints, codes, limit: toCentavos(limit) }
-  }
-
-  function statusOf(loan: LoanState): string {
-    return repayments[loan.id]?.status ?? loan.status
-  }
-
-  const rows = loans
-    .filter((loan) => filter === 'ALL' || statusOf(loan) === filter)
-    .filter((loan) => {
-      const applicant = APPLICANTS.find((a) => a.borrowerId === loan.borrowerId)
-      const q = search.toLowerCase()
-      return (
-        loan.id.toLowerCase().includes(q) ||
-        loan.borrowerId.toLowerCase().includes(q) ||
-        (applicant?.name.toLowerCase().includes(q) ?? false)
-      )
-    })
-
-  const selected = loans.find((loan) => loan.id === selectedId)
-  const selectedApplicant = APPLICANTS.find((a) => a.borrowerId === selected?.borrowerId)
-
-  function act(type: 'START_REVIEW' | 'APPROVE' | 'REJECT') {
-    if (selected === undefined || selectedApplicant === undefined) return
-    const s = score(selectedApplicant)
-    const result =
-      type === 'REJECT'
-        ? server.applyEvent(selected.id, { type: 'REJECT', reason: s.codes.join(', ') || 'Reviewer decision' })
-        : server.applyEvent(selected.id, { type })
-    refresh()
-    if (result?.ok) setMessage(`${selected.id} is now ${result.loan.status}.`)
-    else setMessage(result?.message ?? 'Loan not found')
-  }
-
-  const repayLoan = loans.find((loan) => loan.id === repayLoanId)
-
-  function postRepayment() {
-    if (repayLoan === undefined || repayLoan.status !== 'DISBURSED') return
-    const parsed = parsePesosToCentavos(repayAmount)
-    if (!parsed.ok) {
-      setMessage('Invalid amount')
-      return
+  const detailHeadingRef = useRef<HTMLHeadingElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const focusDetail = useRef(false)
+  useEffect(() => {
+    if (focusDetail.current) {
+      focusDetail.current = false
+      detailHeadingRef.current?.focus()
     }
-    const total = parsed.value
-    const principal = toCentavos(Math.floor(total / (1 + INTEREST_RATE)))
-    const interest = toCentavos(Math.floor((total * INTEREST_RATE) / (1 + INTEREST_RATE)))
-    const outstanding = repayments[repayLoan.id]?.outstanding ?? repayLoan.disbursedAmount
-    const id = `JE-${String(ledger.length + 1).padStart(4, '0')}`
-    server.appendEntry({
-      id,
-      loanId: repayLoan.id,
-      idempotencyKey: crypto.randomUUID(),
-      lines: [
-        { account: `wallet_clearing:${repayLoan.provider}`, side: 'DEBIT', amount: total },
-        { account: `loans_receivable:${repayLoan.borrowerId}`, side: 'CREDIT', amount: principal },
-        { account: 'interest_income', side: 'CREDIT', amount: interest },
-      ],
-    })
-    refresh()
-    const left = outstanding - principal
-    setRepayments({ ...repayments, [repayLoan.id]: { status: left <= 0 ? 'SETTLED' : 'REPAYING', outstanding: left } })
-    setMessage(`Posted ${id}: principal ${formatPHP(principal)}, interest ${formatPHP(interest)}.`)
-  }
+  })
 
-  function postReversal() {
-    const original = ledger.find((entry) => entry.id === reverseId)
-    if (original === undefined) return
-    const id = `REV-${original.id}`
-    server.appendEntry({
-      id,
-      loanId: original.loanId,
-      idempotencyKey: crypto.randomUUID(),
-      lines: original.lines.map((line) => ({ ...line, side: line.side === 'DEBIT' ? 'CREDIT' : 'DEBIT' })),
-    })
-    refresh()
-    const principalLine = original.lines.find((line) => line.account.startsWith('loans_receivable'))
-    const current = repayments[original.loanId]
-    if (current !== undefined && principalLine !== undefined) {
-      setRepayments({
-        ...repayments,
-        [original.loanId]: { status: 'REPAYING', outstanding: current.outstanding + principalLine.amount },
+  const selected = queue.rows.find((row) => row.loan.id === selectedId) ?? null
+
+  const select = useCallback((row: QueueRow) => {
+    focusDetail.current = true
+    setSelectedId(row.loan.id)
+  }, [])
+
+  const { send } = queue
+  const runCommand = useCallback(
+    async (command: LoanCommand, version: number): Promise<LoanCommandResponse | null> => {
+      const response = await send({
+        headers: { 'Idempotency-Key': createKey(), 'If-Match': formatIfMatch(version) },
+        body: command,
       })
-    }
-    setMessage(`Posted ${id} reversing ${original.id}.`)
-  }
+      if (response !== null) {
+        setAnnouncement(describeCommand(command.loanId, response))
+        // The buttons just pressed may be gone (the state changed): keep focus on the panel.
+        focusDetail.current = true
+      }
+      return response
+    },
+    [send, createKey],
+  )
+
+  const filterHintId = `${id}-filter-hint`
+  const searchId = `${id}-search`
+  const searchHintId = `${id}-search-hint`
+  const countId = `${id}-count`
+  const approveHintId = `${id}-approve-hint`
 
   return (
-    <section className="mt-10 space-y-6 border-t border-slate-800 pt-8">
-      <h2 className="text-2xl font-semibold">Underwriting workbench</h2>
-
-      <div className="flex flex-wrap gap-2">
-        {['ALL', 'APPLIED', 'UNDER_REVIEW', 'APPROVED', 'DISBURSED', 'REPAYING', 'SETTLED', 'REJECTED'].map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setFilter(s)}
-            className={`rounded px-2 py-1 font-mono text-xs ${filter === s ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}`}
-          >
-            {s}
-          </button>
-        ))}
+    <section aria-labelledby={`${id}-title`} className="mt-10 space-y-6 border-t border-slate-800 pt-8">
+      <div className="space-y-1">
+        <h2 id={`${id}-title`} className="text-2xl font-semibold">
+          Underwriting workbench
+        </h2>
+        <p className="text-sm text-slate-300">
+          Score alt-data, then Approve offer (UNDER_REVIEW → APPROVED) to send a loan to the Disburse form above.
+        </p>
       </div>
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search borrower name or ID"
-        className="w-full rounded bg-slate-900 px-3 py-2 text-slate-100"
-      />
 
-      <table className="w-full text-left text-sm">
-        <thead className="text-slate-300">
-          <tr>
-            <th className="py-1 pr-3">Loan</th>
-            <th className="py-1 pr-3">Borrower</th>
-            <th className="py-1 pr-3">State</th>
-            <th className="py-1">Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((loan) => {
-            const applicant = APPLICANTS.find((a) => a.borrowerId === loan.borrowerId)
-            return (
-              <tr
-                key={loan.id}
-                onClick={() => setSelectedId(loan.id)}
-                className={`cursor-pointer border-t border-slate-800 ${selectedId === loan.id ? 'bg-slate-800' : ''}`}
-              >
-                <td className="py-1 pr-3 font-mono">{loan.id}</td>
-                <td className="py-1 pr-3">{applicant?.name ?? loan.borrowerId}</td>
-                <td className="py-1 pr-3 font-mono">{statusOf(loan)}</td>
-                <td className="py-1 font-mono">{applicant ? score(applicant).total : '—'}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <div role="status" aria-live="polite" className="text-sm">
+        {announcement?.tone === 'success' && (
+          <p className="rounded-md border border-emerald-400 bg-emerald-950 p-3 text-emerald-100">
+            <span aria-hidden="true">✓ </span>
+            {announcement.text}
+          </p>
+        )}
+      </div>
+      <div role="alert" className="text-sm">
+        {announcement?.tone === 'alert' && (
+          <p className="rounded-md border border-rose-400 bg-rose-950 p-3 text-rose-100">
+            <span aria-hidden="true">⚠ </span>
+            {announcement.text}
+          </p>
+        )}
+      </div>
 
-      {selected && selectedApplicant && (
-        <div className="space-y-3 rounded-lg border border-slate-800 p-4">
-          <h3 className="text-lg font-semibold">
-            {selected.id} · {selectedApplicant.name}
-          </h3>
-          <p className="text-3xl font-semibold">{score(selectedApplicant).total} / 1000</p>
-          <ul className="text-sm text-slate-300">
-            <li>Utility bill consistency ({selectedApplicant.utility.provider}): {score(selectedApplicant).utilityPoints} / 350</li>
-            <li>Supplier invoice history: {score(selectedApplicant).supplierPoints} / 350</li>
-            <li>Telco / GCash load top-up cadence: {score(selectedApplicant).loadPoints} / 300</li>
-          </ul>
-          <p className="text-sm">Reason codes: {score(selectedApplicant).codes.join(', ') || 'none'}</p>
-          <p className="text-sm">Recommended limit: {formatPHP(score(selectedApplicant).limit)}</p>
-          <div className="flex gap-2">
-            {selected.status === 'APPLIED' && (
-              <button type="button" onClick={() => act('START_REVIEW')} className="rounded bg-slate-700 px-3 py-2">
-                Start review
-              </button>
-            )}
-            {selected.status === 'UNDER_REVIEW' && (
-              <>
-                <button type="button" onClick={() => act('APPROVE')} className="rounded bg-emerald-600 px-3 py-2">
-                  Approve offer
-                </button>
-                <button type="button" onClick={() => act('REJECT')} className="rounded bg-rose-700 px-3 py-2">
-                  Reject with reason codes
-                </button>
-              </>
-            )}
+      <div className="space-y-4">
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Filter by state</legend>
+          <p id={filterHintId} className="text-xs text-slate-300">
+            Arrow keys move between states.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {QUEUE_FILTERS.map((filter) => {
+              const radioId = `${id}-filter-${filter}`
+              return (
+                <div key={filter} className="flex items-center">
+                  <input
+                    id={radioId}
+                    type="radio"
+                    name={`${id}-filter`}
+                    value={filter}
+                    checked={queue.filter === filter}
+                    onChange={() => {
+                      queue.setFilter(filter)
+                    }}
+                    aria-invalid="false"
+                    aria-describedby={filterHintId}
+                    className="peer sr-only"
+                  />
+                  <label
+                    htmlFor={radioId}
+                    className="cursor-pointer rounded border border-slate-700 px-2 py-1 font-mono text-xs text-slate-200 peer-checked:border-emerald-400 peer-checked:bg-emerald-950 peer-checked:text-emerald-100 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-400"
+                  >
+                    {filter}
+                  </label>
+                </div>
+              )
+            })}
           </div>
+        </fieldset>
+
+        <div className="space-y-1">
+          <label htmlFor={searchId} className="block text-sm font-medium">
+            Search borrower name or loan ID
+          </label>
+          <input
+            ref={searchRef}
+            id={searchId}
+            type="search"
+            value={queue.query}
+            onChange={(event) => {
+              queue.setQuery(event.target.value)
+            }}
+            aria-invalid="false"
+            aria-describedby={`${searchHintId} ${countId}`}
+            className="w-full rounded-md border border-slate-600 bg-slate-950 px-3 py-2 text-slate-100 focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+          />
+          <p id={searchHintId} className="text-xs text-slate-300">
+            e.g. Liza or L-1044. The list updates when you stop typing.
+          </p>
         </div>
+
+        <p id={countId} aria-live="polite" className="text-sm text-slate-300">
+          Showing {queue.visibleRows.length} of {queue.rows.length} loans.
+        </p>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">Underwriting queue</caption>
+            <thead className="text-slate-300">
+              <tr>
+                <th scope="col" className="py-1 pr-3">Loan</th>
+                <th scope="col" className="py-1 pr-3">Borrower</th>
+                <th scope="col" className="py-1 pr-3">State</th>
+                <th scope="col" className="py-1 pr-3">Trust score</th>
+                <th scope="col" className="py-1">
+                  <span className="sr-only">Action</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {queue.visibleRows.map((row) => (
+                <tr
+                  key={row.loan.id}
+                  aria-current={row.loan.id === selectedId ? 'true' : undefined}
+                  className={`border-t border-slate-800 ${row.loan.id === selectedId ? 'bg-slate-800/60' : ''}`}
+                >
+                  <td className="py-1 pr-3 font-mono">{row.loan.id}</td>
+                  <td className="py-1 pr-3">{row.profile?.name ?? row.loan.borrowerId}</td>
+                  <td className="py-1 pr-3 font-mono">{row.loan.status}</td>
+                  <td className="py-1 pr-3 font-mono">{row.score === null ? '—' : `${row.score.score} · ${row.score.band}`}</td>
+                  <td className="py-1">
+                    <button
+                      type="button"
+                      aria-label={`Review ${row.loan.id}`}
+                      onClick={() => {
+                        select(row)
+                      }}
+                      className="rounded border border-slate-600 px-2 py-1 text-xs hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
+                    >
+                      Review
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {selected !== null && (
+        <section aria-labelledby={`${id}-detail`} className="space-y-4 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+          <h3
+            id={`${id}-detail`}
+            ref={detailHeadingRef}
+            tabIndex={-1}
+            className="text-lg font-semibold focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+          >
+            {selected.loan.id} · {selected.profile?.name ?? selected.loan.borrowerId} ·{' '}
+            <span className="font-mono">{selected.loan.status}</span>
+          </h3>
+
+          {selected.score === null ? (
+            <p className="text-sm text-slate-300">No alternative data on file for this borrower.</p>
+          ) : (
+            <>
+              <p aria-live="polite" aria-atomic="true" data-testid="trust-score" className="text-base">
+                Trust score <span className="font-mono text-2xl font-semibold">{selected.score.score}</span> / {MAX_SCORE}
+                {' · '}
+                <span className="font-mono">{selected.score.band}</span> risk
+              </p>
+              <table className="w-full text-left text-sm">
+                <caption className="sr-only">Score breakdown</caption>
+                <thead className="text-slate-300">
+                  <tr>
+                    <th scope="col" className="py-1 pr-3">Signal</th>
+                    <th scope="col" className="py-1 text-right">Points</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selected.score.factors.map((factor) => (
+                    <tr key={factor.id} className="border-t border-slate-800">
+                      <th scope="row" className="py-1 pr-3 font-normal">{factor.label}</th>
+                      <td className="py-1 text-right font-mono">
+                        {factor.points} / {factor.maxPoints}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="text-sm">
+                <p className="font-medium">Reason codes</p>
+                {selected.score.reasonCodes.length === 0 ? (
+                  <p className="text-slate-300">None: no adverse signal.</p>
+                ) : (
+                  <ul className="list-disc space-y-1 pl-5">
+                    {selected.score.reasonCodes.map((code) => (
+                      <li key={code}>
+                        <code className="font-mono">{code}</code>: {REASON_TEXT[code]}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <p className="text-sm">
+                Recommended limit:{' '}
+                <span className="font-mono">
+                  {selected.score.recommendedLimit > 0 ? formatPHP(selected.score.recommendedLimit) : 'no offer'}
+                </span>
+              </p>
+
+              <ReviewActions row={selected} inFlight={queue.inFlight} approveHintId={approveHintId} onCommand={runCommand} />
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedId(null)
+              searchRef.current?.focus()
+            }}
+            className="text-sm text-emerald-300 underline focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
+          >
+            Back to queue
+          </button>
+        </section>
       )}
 
-      <div className="space-y-3 rounded-lg border border-slate-800 p-4">
-        <h3 className="text-lg font-semibold">Repayment &amp; compensating reversal</h3>
-        <select value={repayLoanId} onChange={(e) => setRepayLoanId(e.target.value)} className="rounded bg-slate-900 px-3 py-2">
-          <option value="">Select a disbursed loan</option>
-          {loans
-            .filter((loan) => loan.status === 'DISBURSED')
-            .map((loan) => (
-              <option key={loan.id} value={loan.id}>
-                {loan.id} ({repayments[loan.id]?.status ?? 'DISBURSED'})
-              </option>
-            ))}
-        </select>
-        <input
-          value={repayAmount}
-          onChange={(e) => setRepayAmount(e.target.value)}
-          placeholder="Repayment amount in pesos"
-          className="w-full rounded bg-slate-900 px-3 py-2"
-        />
-        <button type="button" onClick={postRepayment} className="rounded bg-emerald-600 px-3 py-2">
-          Post repayment
-        </button>
-        <select value={reverseId} onChange={(e) => setReverseId(e.target.value)} className="rounded bg-slate-900 px-3 py-2">
-          <option value="">Select a transaction to reverse</option>
-          {ledger.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.id}
-            </option>
-          ))}
-        </select>
-        <button type="button" onClick={postReversal} className="rounded bg-rose-700 px-3 py-2">
-          Post compensating reversal
+      <RepaymentPanel
+        loans={queue.loans}
+        ledger={queue.ledger}
+        inFlight={queue.inFlight}
+        createKey={createKey}
+        send={queue.send}
+        onAnnounce={setAnnouncement}
+      />
+    </section>
+  )
+}
+
+interface ReviewActionsProps {
+  readonly row: QueueRow
+  readonly inFlight: boolean
+  readonly approveHintId: string
+  readonly onCommand: (command: LoanCommand, version: number) => Promise<unknown>
+}
+
+/** Renders only the transitions the current state allows (README: the UI never offers an illegal one). */
+function ReviewActions({ row, inFlight, approveHintId, onCommand }: ReviewActionsProps) {
+  const { loan, score } = row
+  if (score === null) return null
+  const button =
+    'rounded-md px-3 py-2 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60'
+
+  if (loan.status === 'APPLIED') {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={inFlight}
+          aria-busy={inFlight}
+          onClick={() => void onCommand({ type: 'START_REVIEW', loanId: loan.id }, loan.version)}
+          className={`${button} bg-slate-700 text-white`}
+        >
+          Start review
         </button>
       </div>
+    )
+  }
+  if (loan.status !== 'UNDER_REVIEW') return null
 
-      {message && <p className="text-sm text-slate-300">{message}</p>}
-    </section>
+  const canOffer = score.recommendedLimit > 0
+  const reasonCodes = score.reasonCodes.length > 0 ? score.reasonCodes : ['REVIEWER_DECISION']
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={inFlight || !canOffer}
+          aria-busy={inFlight}
+          aria-describedby={approveHintId}
+          onClick={() => void onCommand({ type: 'APPROVE', loanId: loan.id }, loan.version)}
+          className={`${button} bg-emerald-500 text-slate-950`}
+        >
+          Approve offer
+        </button>
+        <button
+          type="button"
+          disabled={inFlight}
+          aria-busy={inFlight}
+          onClick={() => void onCommand({ type: 'REJECT', loanId: loan.id, reasonCodes }, loan.version)}
+          className={`${button} bg-rose-700 text-white`}
+        >
+          Reject with reason codes
+        </button>
+      </div>
+      <p id={approveHintId} className="text-xs text-slate-300">
+        {canOffer
+          ? `Sends Idempotency-Key and If-Match: ${formatIfMatch(loan.version)}. Reject records: ${reasonCodes.join(', ')}.`
+          : 'Score is below 400: no offer can be approved. Reject records the reason codes.'}
+      </p>
+    </div>
   )
 }

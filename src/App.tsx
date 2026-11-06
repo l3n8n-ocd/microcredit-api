@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { createDisbursementServer, DisbursementForm, SAMPLE_PAYOUT, SEED_LOANS } from './features/disbursement/index.ts'
 import { UnderwritingWorkbench } from './features/scoring/index.ts'
 
@@ -10,6 +10,12 @@ export function App() {
   // Both panels share one server. Each bumps its own counter after a change, and the other re-reads.
   const [formRevision, setFormRevision] = useState(0)
   const [workbenchRevision, setWorkbenchRevision] = useState(0)
+  const bumpForm = useCallback(() => {
+    setFormRevision((value) => value + 1)
+  }, [])
+  const bumpWorkbench = useCallback(() => {
+    setWorkbenchRevision((value) => value + 1)
+  }, [])
 
   return (
     <main className="min-h-dvh bg-slate-950 px-4 py-8 text-slate-100 sm:px-8 sm:py-12">
@@ -25,12 +31,12 @@ export function App() {
           server={server}
           initialValues={SAMPLE_PAYOUT}
           revision={workbenchRevision}
-          onServerChange={() => setFormRevision((value) => value + 1)}
+          onServerChange={bumpForm}
         />
         <UnderwritingWorkbench
           server={server}
           revision={formRevision}
-          onServerChange={() => setWorkbenchRevision((value) => value + 1)}
+          onServerChange={bumpWorkbench}
         />
       </div>
     </main>
