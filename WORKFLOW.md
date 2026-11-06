@@ -2,7 +2,7 @@
 
 ## Branch & Diff Overview
 
-| | `feat/disburse-form-vague` (`50abff4`) | `feat/disburse-form-precise` (`9d58411`) |
+| | `feat/disburse-form-vague` (`2ba0a9c`) | `feat/disburse-form-precise` (`0aaed92`) |
 | --- | --- | --- |
 | Diff vs. `main` | 6 files, +294 / −2 | 16 files, +1,831 / −4 |
 | Structure | One 217-line `DisbursementSettingsForm.tsx`, 9-line `utils/money.ts` | `types.ts` 129, `loanStateMachine.ts` 59, `ledger.ts` 47, `validation.ts` 118, `disbursementServer.ts` 184, `DisbursementForm.tsx` 562 |
