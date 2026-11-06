@@ -160,4 +160,4 @@ That document's rules still hold, with this kit's values:
 | Favicon and monogram | Rendered in Chromium at 16, 32, 64 and 256 px, and checked by eye at each size. |
 | `npm run build` | `dist/favicon.svg` is emitted. The CSS sets `font-sans` to Plus Jakarta Sans. |
 | Above-the-fold check with the new fonts | Measured with all 6 font faces loaded (served from the `@fontsource` files, because this container cannot reach Google Fonts), and again with fonts blocked. Disburse and Simulate end at 535 / 717 px of 740 on a phone and 467 / 601 px of 800 on a laptop, the same as before. `npm run test:e2e` passes 6/6. |
-| Live site | **TODO:** after this push, confirm the deployed demo shows the `LA.` tab icon. |
+| Live site | Verified after commit `8765963`. [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app) serves `/favicon.svg` (the `LA.` monogram), and its `index.html` has the `rel="icon"` link and the Google Fonts stylesheet. |
