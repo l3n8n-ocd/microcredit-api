@@ -38,6 +38,10 @@ table at the end shows how each number was produced.
   - The subagents may have received this repo's `CLAUDE.md` despite the instruction to ignore it. The
     baseline's unprompted use of integer money hints at either strong model defaults or leakage. It
     used **USD cents and `en-US`**, not centavos, which points to defaults rather than copying.
+  - **TODO, pending control run:** the Run 0 prompt will be re-run once in a fresh claude.ai chat,
+    outside this repository *and* outside the FlyRank Claude Project (whose instructions also mention
+    centavos). If that output also uses integer money and idempotency keys, they are model defaults;
+    if not, the subagent runs were influenced by this repo's context.
 - **The brief vs. reality.** The assignment brief predicted specific outputs, such as a 30-line float
   `class Loan` for Run 0 and four states silently dropped in Run 4. Several predictions did **not**
   happen. Each run below says where reality differed, and the notes describe what actually happened.
@@ -449,6 +453,14 @@ Plus a 12-row invariant table in the output (excerpt):
 4. **What I would try next:** turn the domain-specific parts into documented placeholders, and add the
    two lessons this ladder taught (no JSON or line-cap wrappers; always run the tests yourself). That
    gives the stranger-ready template below.
+
+> **Decision (2026-11-06): Run 5's code is not merged into `src/`.** The One Action is double-clicking
+> **Disburse**, and that path is already covered by `src/features/disbursement/` (5 states, with
+> `Idempotency-Key` + `If-Match` tests). The repayment states (`REPAYING`, `SETTLED`, `DELINQUENT`, …)
+> don't strengthen the One Claim yet, so they wait until a repayment feature is the assignment. When
+> that happens, Run 5 is the starting point. First decide whether a `DELINQUENT` loan may be paid off
+> in full without `CURE` (Run 5 forbids it), then adapt it to `src/utils/money.ts` and the
+> `CLAUDE.md` §11 rules.
 
 ---
 
