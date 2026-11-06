@@ -992,9 +992,10 @@ the transformation (few-shot)** rather than describing it.
 ### 🧩 Reusable Template: Raw Engineering/Security Notes → Verified Technical Advisory & Remediation Diff
 
 This is v5 with every project detail replaced by a placeholder, plus **one fix this log earned**: §6
-lists sensitive values **by type and line number only, never the value itself**. That fix is
-**untested**; it targets the leak measured in v4 and v5. Fill in the placeholders and paste the result
-into a fresh chat.
+lists sensitive values **by type and line number only, never the value itself**. That fix targets
+the leak measured in v4 and v5. It was tested **once**, after this log was written: 0/8 leaks on the
+smaller model (see [Template verification run](#template-verification-run)). One run is evidence, not
+proof. Fill in the placeholders and paste the result into a fresh chat.
 
 ````text
 You are a Principal Application Security Researcher and Technical Advisory Editor. You write security
@@ -1109,6 +1110,7 @@ python3 -I docs/fl-02/harness/measure.py
 | larger-v2-context | 1848 | 0/8 | — | 0 | 5/6 (missing: Remediation diff) | `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N` (no `CVSS:3.1/` prefix) | 7.5 / 7.5 | PR:N (ref L) | no tags |
 | larger-v3-fewshot | 1685 | 0/8 | — | 0 | 6/6 | `CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:H/A:N` | 5.3 / 5.3 | AC:H (ref L) | no tags |
 | larger-v4-structure-TRUNCATED | 1362 | 0/8 | — | 0 | 5/6 (missing: Remediation diff) | `CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:H/A:N` | 5.3 / 5.3 | AC:H (ref L) | no tags |
+| smaller-template | 2049 | 0/8 | 0/8 | 0 | 6/6 | `CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N` | 6.5 / 6.5 | matches reference | 0 words |
 | smaller-v0-naive | 1253 | 0/8 | — | 0 | 4/6 (missing: CVSS vector, Remediation diff) | none | — / — | — | no tags |
 | smaller-v1-role | 903 | 0/8 | — | 0 | 4/6 (missing: CVSS vector, Remediation diff) | none | — / — | — | no tags |
 | smaller-v2-context | 677 | 0/8 | — | 0 | 4/6 (missing: CVSS vector, Remediation diff) | none | — / — | — | no tags |
@@ -1118,3 +1120,55 @@ python3 -I docs/fl-02/harness/measure.py
 
 Raw outputs: [`docs/fl-02/runs/`](./fl-02/runs/) · prompts: [`docs/fl-02/prompts/`](./fl-02/prompts/) ·
 fixture: [`docs/fl-02/fixture/`](./fl-02/fixture/).
+
+---
+
+## Template verification run
+
+**What ran.** The Section 4 template, filled in and saved as
+[`docs/fl-02/prompts/prompt-template-filled.txt`](./fl-02/prompts/prompt-template-filled.txt) (941
+words). Fills: audience "external client engineering leads and the maintainers of a public
+repository", target "an internal staging environment of a payout webhook service", the same redaction
+rules and the same fixture notes as v0 to v5. One fresh smaller-model subagent, one `Read` of the
+prompt file and no other tool (checked in its transcript). Output saved verbatim:
+[`docs/fl-02/runs/run-smaller-template.md`](./fl-02/runs/run-smaller-template.md).
+
+**Harness result** (row `smaller-template` in [Measurements](#measurements)):
+
+| Check | v5 (before the §6 fix) | Template (after the fix) |
+| --- | --- | --- |
+| Leaks in advisory | 3/8 (DB user, both internal IPs) | **0/8** |
+| Leaks in scratchpad | 0/8 | 0/8 |
+| FL-01 sections | 6/6 | 6/6 |
+| CVSS vector | matches reference, 6.5 | matches reference, 6.5 |
+| Invented CVE IDs | 0 | 0 |
+| Text outside the tags | 0 words | 0 words |
+
+The §6 audit table now lists each value by type, notes line and placeholder. No original value
+appears in it. That is the leak path v4 and v5 used.
+
+**Hand check of every notes-line citation** against the fixture (line 1 = the `## notes` header):
+
+| # | Defect | Where | Correct value |
+| --- | --- | --- | --- |
+| 1 | Refund-webhook guess cited as notes 58 | Scratchpad, §3 "Not assessed", §5 item 5, claim 14 | Notes **57**. Line 58 is the CVE / severity line. |
+| 2 | MSISDN audit row lists line 7 only | §6 audit table | Lines **7 and 26**. The phone number also appears in the second admin response. |
+| 3 | Diff hunk header `@@ -56,7 +56,7 @@` | §5 diff | `@@ -56,7 +56,6 @@`. The hunk removes 7 lines and adds 6, so `git apply` rejects it as written. |
+
+Every other citation matched: notes 1 to 3, 5 to 7, 9 to 10, 12 to 13, 16 to 19, 21 to 27, 29 to
+37, 40 to 52 and 54 to 56. Like smaller v0 and v2, it flagged that the "reset wallet" step at notes
+21 to 22 shows no commands, so the parallel-run balance depends on an undocumented reset.
+
+**Against FL-01 Target Task 2 "Done Well":**
+
+| Criterion | Result |
+| --- | --- |
+| 6/6 required sections | **Pass** |
+| 0 leaked tokens/IPs | **Pass** (0/8, one run) |
+| < 3 manual factual corrections | **Pass on a strict count, borderline on a loose one.** 2 citation errors; 3 if the diff header counts. |
+| < 10 min from raw notes | **Untested end to end.** Generation took 2 min 9 s. Review time was not timed. |
+
+**Verdict.** On this fixture, the §6 change stopped the leak that v4 and v5 showed. Two limits remain.
+First, n = 1 on one model: the larger model was not re-run, because safeguards blocked it from v4
+onward. Second, line-number citations are the new weak spot. Before sign-off, check each cited line
+against the notes and run `git apply --check` on the diff.
