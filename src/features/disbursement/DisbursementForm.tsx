@@ -22,6 +22,14 @@ export interface DisbursementFormProps {
   readonly createKey?: () => string
   /** Values the form starts with (and returns to on Reset). Defaults to an empty form. */
   readonly initialValues?: FormValues
+  /**
+   * Bumped by other panels on the same screen after they change the server.
+   * The form then re-reads loans and the ledger. A separate admin screen does
+   * not share it, so its If-Match stays stale until it reloads.
+   */
+  readonly revision?: number
+  /** Called after this form changes the server (payout or reset). */
+  readonly onServerChange?: () => void
 }
 
 type SimulationMode = 'retry' | 'second-admin'
@@ -118,6 +126,8 @@ export function DisbursementForm({
   server,
   createKey = createIdempotencyKey,
   initialValues = EMPTY_VALUES,
+  revision = 0,
+  onServerChange,
 }: DisbursementFormProps) {
   const id = useId()
   const fieldId = (field: FieldName): string => `${id}-${field}`
@@ -133,6 +143,15 @@ export function DisbursementForm({
   const [log, setLog] = useState<readonly LogEntry[]>([])
   const [banner, setBanner] = useState<Banner | null>(null)
   const [mode, setMode] = useState<SimulationMode>('retry')
+
+  // Another panel on this screen (the underwriting workbench) changed the server:
+  // re-read during render (React's "adjust state when a prop changes" pattern).
+  const [seenRevision, setSeenRevision] = useState(revision)
+  if (revision !== seenRevision) {
+    setSeenRevision(revision)
+    setLoans(server.listLoans())
+    setLedger(server.getLedger())
+  }
 
   const approvedLoans = loans.filter((loan) => loan.status === 'APPROVED')
   const selectedLoan = findApprovedLoan(loans, values.loanId)
@@ -168,6 +187,7 @@ export function DisbursementForm({
       ])
       setLoans(server.listLoans())
       setLedger(server.getLedger())
+      onServerChange?.()
 
       const summary = responses.map((response, index) => `Request ${index + 1}: ${describeResponse(response)}.`).join(' ')
       const created = responses.some((response) => response.kind === 'CREATED')
@@ -223,6 +243,7 @@ export function DisbursementForm({
     server.reset()
     setLoans(server.listLoans())
     setLedger(server.getLedger())
+    onServerChange?.()
     setLog([])
     setBanner(null)
     setValues(initialValues)

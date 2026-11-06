@@ -5,8 +5,10 @@ import type {
   DisbursementRequest,
   DisbursementResponse,
   JournalEntry,
+  LoanEvent,
   LoanOf,
   LoanState,
+  TransitionResult,
 } from './types.ts'
 import { isDisbursableAmount, isValidReferenceNote, isWalletProvider, PH_MOBILE_PATTERN } from './validation.ts'
 
@@ -29,6 +31,10 @@ export interface DisbursementServer {
   disburse: (request: DisbursementRequest) => Promise<DisbursementResponse>
   listLoans: () => readonly LoanState[]
   getLedger: () => readonly JournalEntry[]
+  /** Applies a state-machine event to a loan (used by the underwriting workbench). */
+  applyEvent: (loanId: string, event: LoanEvent) => TransitionResult | null
+  /** Appends a journal entry (used by the repayment panel). */
+  appendEntry: (entry: JournalEntry) => void
   reset: () => void
 }
 
@@ -175,6 +181,18 @@ export function createDisbursementServer(
     },
     listLoans: () => [...loans.values()],
     getLedger: () => ledger,
+    applyEvent: (loanId, event) => {
+      const loan = loans.get(loanId)
+      if (loan === undefined) return null
+      const result = transitionLoan(loan, event)
+      if (result.ok) {
+        loans = new Map(loans).set(loanId, result.loan)
+      }
+      return result
+    },
+    appendEntry: (entry) => {
+      ledger = [...ledger, entry]
+    },
     reset: () => {
       loans = new Map(seedLoans.map((loan) => [loan.id, loan]))
       ledger = []

@@ -56,7 +56,10 @@ export type TransitionResult =
 
 export type WalletProvider = 'gcash' | 'maya'
 
-export type LedgerAccount = `loans_receivable:${string}` | `wallet_clearing:${WalletProvider}`
+export type LedgerAccount =
+  | `loans_receivable:${string}`
+  | `wallet_clearing:${WalletProvider}`
+  | 'interest_income'
 
 export interface JournalLine {
   readonly account: LedgerAccount
