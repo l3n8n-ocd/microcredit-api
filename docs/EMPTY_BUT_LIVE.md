@@ -17,8 +17,9 @@
 **Verification**
 - The Next app is live on Vercel: `GET /health` returns `200` and the home page serves `_next/static`
   assets (checked 2026-11-09).
-- `/portfolio` ships with commit the Week 4 commit; after it deploys, open it on a **second device
-  (phone)** to confirm it is live — the route is a static page, so it loads with no interaction.
+- `/portfolio` is **live, verified 2026-11-09**: `GET /portfolio` returns `200` and serves the canonical
+  claim, the `EMPTY BUT LIVE` status pill, and the 3 case frames from `_next/static`. Open it on a
+  **second device (phone)** — it is a static page, so it loads with no interaction.
 - Local production parity: `next build` + `next start`, then Playwright at **375×812** (iPhone) and
   **1280×800**. Zero horizontal overflow at both widths (enforced by `e2e/fold.mjs`).
 
