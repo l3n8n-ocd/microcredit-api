@@ -270,6 +270,12 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **5 documented runs** (Node2Shell, idempotency replay, centavo drift, stale If-Match, a brand-new
     webhook-HMAC-replay input) all pass the deterministic gate: `node workflows/fl-04-advisory-pipeline/run-pipeline-verify.mjs`.
   - **Honest time accounting** (break-even at Run #4) and 4 named failure points with the human-in-the-loop checklist.
+- **FL-05 · Agent Concepts and MCP Basics (Week 4 General AI Fluency):** [`docs/FL-05_AGENTS_AND_MCP.md`](./docs/FL-05_AGENTS_AND_MCP.md) · [`.mcp.json`](./.mcp.json) · [`mcp/microcredit-mcp-server.mjs`](./mcp/microcredit-mcp-server.mjs)
+  - **707-word explainer:** workflow vs. agent (FL-04 is a deterministic prompt-chain-with-gate, not an
+    agent), MCP's three primitives (Tools/Resources/Prompts), and the one agent upgrade FL-04 would need.
+  - **Working MCP server** (JSON-RPC 2.0 over stdio): 3 tools, 2 resources, 1 prompt, grounded in this repo.
+  - **3 real tool calls** chat alone can't do — local file audit, live `/api/health` telemetry, and a
+    cross-file redaction+CVSS audit that writes an artifact to disk — with screenshots in `docs/assets/curated/`.
 
 ## License
 

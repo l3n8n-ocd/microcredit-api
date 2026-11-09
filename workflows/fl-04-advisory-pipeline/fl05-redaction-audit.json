@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-11-09T06:22:07.402Z",
+  "scanned": 5,
+  "passed": 5,
+  "per_run": [
+    {
+      "id": "RUN-1",
+      "title": "Node2Shell (CVE-2026-111497) — Brotli decoder out-of-bounds write",
+      "leaked_secrets": [],
+      "redaction_pass": true,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+      "cvss_score_matches": true,
+      "verdict": "PASS"
+    },
+    {
+      "id": "RUN-2",
+      "title": "MicroCredit API — missing Idempotency-Key replay lock on concurrent disbursement",
+      "leaked_secrets": [],
+      "redaction_pass": true,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:H/A:N",
+      "cvss_score_matches": true,
+      "verdict": "PASS"
+    },
+    {
+      "id": "RUN-3",
+      "title": "MicroCredit API — IEEE 754 centavo drift on a 3-way repayment split",
+      "leaked_secrets": [],
+      "redaction_pass": true,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:N/I:L/A:N",
+      "cvss_score_matches": true,
+      "verdict": "PASS"
+    },
+    {
+      "id": "RUN-4",
+      "title": "MicroCredit API — stale If-Match bypass on UNDER_REVIEW → APPROVED",
+      "leaked_secrets": [],
+      "redaction_pass": true,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:N/I:H/A:N",
+      "cvss_score_matches": true,
+      "verdict": "PASS"
+    },
+    {
+      "id": "RUN-5",
+      "title": "Payment callback — unverified webhook HMAC + timestamp replay (brand-new input)",
+      "leaked_secrets": [],
+      "redaction_pass": true,
+      "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+      "cvss_score_matches": true,
+      "verdict": "PASS"
+    }
+  ]
+}

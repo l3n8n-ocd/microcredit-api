@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "microcredit-mcp": {
+      "command": "node",
+      "args": ["mcp/microcredit-mcp-server.mjs"],
+      "description": "Project MCP server: 3 tools, 2 resources, 1 prompt grounded in this repo."
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "description": "Official read-only filesystem connector scoped to the repo root."
+    }
+  }
+}
