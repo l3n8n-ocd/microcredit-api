@@ -257,6 +257,13 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **Verified** at 375×812 and 1280×800 with zero horizontal overflow; screenshots in `docs/assets/curated/`.
   - **Claude Project context pack:** Identity Kit + framed cases + content map consolidated into one
     Master Context Block, indexed in [`CLAUDE.md` §13](./CLAUDE.md#13-week-4-build-context-index).
+- **Three Roads: Choose Your Stack with AI · Week 4 General AI Fluency:** [`docs/THREE_ROADS_STACK_RATIONALE.md`](./docs/THREE_ROADS_STACK_RATIONALE.md)
+  - **4 real constraints** (free-only, honest skill level, the 4-section sitemap, display + backend needs)
+    given to AI.
+  - **3 genuine stacks, simplest to most powerful:** static HTML on GitHub Pages, Next.js on Vercel
+    (chosen), full-stack + Postgres + CMS.
+  - **Pressure-tested** against what breaks, what to maintain, two-week feasibility, and whether it shows
+    the work — plus a first-person rationale and the honest "not yet" on a backend.
 
 ## License
 
