@@ -124,7 +124,7 @@ app and the repo/CI, the API is a teammate's (`FRAME_IT_AS_CASES.md` §2). Icon:
 | Order | Element | Note |
 | --- | --- | --- |
 | 1 | A 15-minute booking link (one-click scheduling) | A link, not a heavy calendar embed, so it is fast on a low-end phone (`PORTFOLIO_PATH.md` v2) |
-| 2 | Fast-copy contact: email `ladriano0209@gmail.com`, [GitHub](https://github.com/l3n8n-ocd/microcredit-api), [live demo](https://microcredit-api-beta.vercel.app) | This publishes an email, which changes the earlier "GitHub profile only" decision (`FRAME_IT_AS_CASES.md` §4). Confirm before shipping (see §4). |
+| 2 | Fast-copy contact: [GitHub](https://github.com/l3n8n-ocd/microcredit-api) and [live demo](https://microcredit-api-beta.vercel.app) links | **GitHub profile only, no email** (`FRAME_IT_AS_CASES.md` §4). Contact runs through the GitHub profile's links. |
 | 3 | One reassurance line | "In 15 minutes we walk `transitionLoan`, the `Idempotency-Key` replay-before-`If-Match` check, and the test suite — live, in the repo." |
 
 - **Named CTA (the Week 1 One Action):** **"Book a 15-minute technical walkthrough."**
@@ -178,7 +178,7 @@ booking action stays on screen.
 | 4 | Mentor / supervisor testimonial (VulnTech or capstone adviser) | About | 🟡 **Still need to gather** | Permission to quote a 1–2 line endorsement on PoC accuracy or leadership | Omit the quote block; show verifiable credential links + the live CI pass badge until the quote arrives |
 | 5 | RoadWatch production screenshots | 2C | 🟡 **Partial** | One clean mobile + web screenshot pair with test data redacted, and attributed to your part (the Flutter app), not the teammate's dashboard (`CURATE_YOUR_IMAGES.md`) | Lead Case 3 with the state diagram + `kit-04` icon card; it ships on day 1 without the screenshots |
 | 6 | RedTeamLeaders "Certified LLM Security Professional" badge | About strip | 🟡 **Still need to gather** | A verifiable public link (credential URL or badge ID). Not yet anywhere in the repo, so it can't be stated as fact (`CLAUDE.md` §9.2 rule 4) | Show only credentials that link out (the repo's own CI badge, the public advisory) until the link is in hand |
-| 7 | `/#act` contact email (`ladriano0209@gmail.com`) | Act | 🟡 **Confirm** | This publishes a personal email and reverses the earlier "GitHub profile only" choice. Confirm you want it public | Keep GitHub + booking link only; add the email once confirmed |
+| 7 | `/#act` contact method | Act | ✅ **Decided** | None: contact stays **GitHub profile only, no email** (confirmed 2026-11-09). No personal email is published | — |
 | 8 | Unfinished internship work (Weeks 4–10: FL-04 automation, capstone polish) | 2A "Shipped Engineering Log" | ⏳ **In progress (future weeks)** | Week 4+ pipelines don't exist to link yet | Build a modular "Shipped Engineering Log" row in Case 1 that lists FE-01 → Week 3 now and takes FL-04 and later milestones as single-row adds, no redesign |
 
 **Ready now: items 1, 2, and the Case 1 content.** The build can start on the flagship with real evidence
@@ -193,5 +193,5 @@ on day one; items 3–7 have fallbacks so no slot blocks the week, and item 8 is
 | Winner vs. canon | The winner equals `CLAUDE.md` §0's One Claim, so the site and the repo state one claim, not two. |
 | Brief's draft line | Kept as candidate #1 and shown being sharpened, not published as the headline (and-trap + unearned "full-stack"). |
 | CTA ladder | All 5 micro-CTAs and the fast path terminate at "Book a 15-minute technical walkthrough"; no dead ends. |
-| Gather list honesty | Item 3 corrected (headshot already in repo); items 6 and 7 flagged as unbacked/needing confirmation rather than asserted. |
+| Gather list honesty | Item 3 corrected (headshot already in repo); item 6 (RedTeamLeaders badge) flagged as needing a link; item 7 decided GitHub-only, no email published. |
 | Voice check | `grep` for the banned words prints nothing. |
