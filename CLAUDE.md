@@ -440,8 +440,8 @@ upstages it.
 2. **Each colour keeps its one meaning.** Green only next to something that passed (`201`,
    `Σ debits === Σ credits`), red only next to a bounce. Never colour alone (§6).
 3. **Two font families, everywhere.** Plus Jakarta Sans (headings, body, UI) and JetBrains Mono (code,
-   headers, amounts, paths), loaded once in `index.html` with `display=swap` and set as `--font-sans` /
-   `--font-mono` in `src/index.css`. No third family.
+   headers, amounts, paths), self-hosted via `next/font/local` in `src/app/layout.tsx` and set as
+   `--font-sans` / `--font-mono` in `src/app/globals.css`. No third family.
 4. **No decorative clutter.** No gradients, `animate-*`, parallax, stock photos, abstract AI art or
    illustrations in the hero. Motion is at most a 150 ms transition and respects
    `prefers-reduced-motion`.
@@ -453,3 +453,20 @@ upstages it.
 grep -rnoE "\b(bg|text|border|ring|outline|fill|stroke|from|via|to|shadow|divide|accent|caret|decoration)-(red|orange|yellow|lime|green|teal|cyan|blue|indigo|violet|purple|fuchsia|pink|gray|zinc|neutral|stone)-[0-9]{2,3}\b|-\[#[0-9a-fA-F]{3,8}\]|bg-gradient|bg-linear|animate-|font-serif|font-\[" src --include=*.tsx --include=*.ts --include=*.css
 ```
 
+---
+
+## 13. Week 4 Build Context Index
+
+Load these three artifacts every session; they are the portfolio build's single source of truth.
+
+| Artifact | File | What it fixes |
+| --- | --- | --- |
+| Identity Kit | [`docs/IDENTITY_KIT.md`](./docs/IDENTITY_KIT.md) | 2 fonts, 4 hex codes, the 2-line style note (§9.4) |
+| Framed Case Studies | [`docs/FRAME_IT_AS_CASES.md`](./docs/FRAME_IT_AS_CASES.md) | 3-beat write-ups for MicroCredit API, Node2Shell, RoadWatch; the Voice Card (§9.3) |
+| Content Map & CTA Ladder | [`docs/THE_THROUGH_LINE.md`](./docs/THE_THROUGH_LINE.md) | the 4 ordered sections and the single One Action (§9.5) |
+
+- **Live shell:** [`/portfolio`](./src/app/portfolio/page.tsx) (https://microcredit-api-beta.vercel.app/portfolio)
+  is the near-blank page these artifacts fill during build week.
+- **Consolidated pack:** [`docs/EMPTY_BUT_LIVE.md`](./docs/EMPTY_BUT_LIVE.md) §2 has all three combined as
+  one copy-paste Master Context Block for the Claude Project.
+- The portfolio headline is the §9.5 canonical claim; contact is GitHub-only (no email).

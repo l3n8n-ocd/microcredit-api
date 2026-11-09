@@ -251,6 +251,12 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **Identity Kit design tokens** in `src/app/globals.css`, fonts self-hosted via `next/font/local`.
   - **Zero-secrets env structure:** [`.env.example`](./.env.example) with placeholders; `.env*`
     gitignored.
+- **Empty but Live: Ship a Blank Page · Week 4 General AI Fluency:** [`docs/EMPTY_BUT_LIVE.md`](./docs/EMPTY_BUT_LIVE.md) · route [`/portfolio`](https://microcredit-api-beta.vercel.app/portfolio)
+  - **Near-blank, live portfolio shell:** name, `LA.` monogram, the canonical one-line claim, and the 4
+    content-map frames (hero → flagship-proof → about → act) as a Server Component in the Identity Kit theme.
+  - **Verified** at 375×812 and 1280×800 with zero horizontal overflow; screenshots in `docs/assets/curated/`.
+  - **Claude Project context pack:** Identity Kit + framed cases + content map consolidated into one
+    Master Context Block, indexed in [`CLAUDE.md` §13](./CLAUDE.md#13-week-4-build-context-index).
 
 ## License
 
