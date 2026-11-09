@@ -1,3 +1,5 @@
+'use client'
+
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { createIdempotencyKey, formatPHP, parsePesosToCentavos } from '../../utils/index.ts'
 import { formatIfMatch, type DisbursementServer } from './disbursementServer.ts'

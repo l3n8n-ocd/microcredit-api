@@ -1,11 +1,10 @@
 /// <reference types="vitest/config" />
-import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-// https://vite.dev/config/
+// Vite is kept ONLY as the Vitest engine. The app is built by Next.js (next build).
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react()],
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],

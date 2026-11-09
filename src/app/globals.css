@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+
+/*
+ * Identity Kit tokens (docs/IDENTITY_KIT.md). The default Tailwind palette is
+ * KEPT, because the interactive demo components use slate / emerald / rose /
+ * amber. These named tokens add the portfolio's 4 colours and the 2 fonts on
+ * top. Fonts are wired to the next/font/local variables set in layout.tsx.
+ */
+@theme {
+  --font-sans: var(--font-plus-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-canvas: #f8fafc; /* Crisp Paper: page background */
+  --color-ink: #0f172a; /* Obsidian Ink: text */
+  --color-main: #1e293b; /* Deep Ledger Slate: borders, headers */
+  --color-accent: #059669; /* Verification Emerald: CTA, verified, focus */
+}
+
+/*
+ * Turn off JetBrains Mono ligatures: in ledger lines the operator === was drawn
+ * as one long bar, which misreads. Every monospace run shows the exact glyphs.
+ */
+@layer base {
+  code,
+  pre,
+  kbd,
+  samp,
+  .font-mono {
+    font-variant-ligatures: none;
+    font-feature-settings: 'liga' 0, 'calt' 0;
+  }
+}

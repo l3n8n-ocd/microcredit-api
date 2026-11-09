@@ -1,3 +1,5 @@
+'use client'
+
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { createIdempotencyKey, formatPHP } from '../../utils/index.ts'
 import { formatIfMatch, type DisbursementServer, type LoanCommand, type LoanCommandResponse } from '../disbursement/index.ts'

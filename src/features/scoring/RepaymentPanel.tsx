@@ -1,3 +1,5 @@
+'use client'
+
 import { useId, useState, type FormEvent } from 'react'
 import { formatPHP, parsePesosToCentavos, sumCentavos, type Centavos } from '../../utils/index.ts'
 import {

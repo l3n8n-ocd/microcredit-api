@@ -1,3 +1,5 @@
+'use client'
+
 import { useCallback, useState } from 'react'
 import { createDisbursementServer, DisbursementForm, SAMPLE_PAYOUT, SEED_LOANS } from './features/disbursement/index.ts'
 import { UnderwritingWorkbench } from './features/scoring/index.ts'
@@ -18,13 +20,13 @@ export function App() {
   }, [])
 
   return (
-    <main className="min-h-dvh bg-slate-950 px-4 py-5 text-slate-100 sm:px-8 sm:py-12">
+    <main className="min-h-dvh bg-slate-950 px-4 py-4 text-slate-100 sm:px-8 sm:py-12">
       <div className="mx-auto max-w-3xl">
-        <p className="font-mono text-xs font-semibold tracking-widest text-emerald-400 uppercase">
+        <p className="hidden font-mono text-xs font-semibold tracking-widest text-emerald-400 uppercase sm:block">
           Disbursement demo · in-memory mock API
         </p>
-        <h1 className="mt-3 text-3xl font-semibold sm:text-4xl">MicroCredit API</h1>
-        <p className="mt-2 text-base text-slate-300">
+        <h1 className="text-2xl font-semibold sm:mt-3 sm:text-4xl">MicroCredit API</h1>
+        <p className="mt-1.5 text-sm text-slate-300 sm:mt-2 sm:text-base">
           Loan disbursement that cannot pay a borrower twice. Press Disburse, or Simulate a retry.
         </p>
         <DisbursementForm

@@ -31,5 +31,5 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           sudo apt-get install -y --no-install-recommends fonts-roboto
-      - name: Above-the-fold check (Disburse + Simulate visible at 360x740 and 1280x800)
+      - name: Above-the-fold + 5-route responsiveness (Playwright: 360x740, 1280x800, 375px, 1280px)
         run: npm run test:e2e

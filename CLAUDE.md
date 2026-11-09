@@ -61,8 +61,8 @@ disbursement tracker.
 | ----------- | -------------------------------------------- | ----------------------------------------------- |
 | UI library  | **React** (functional components + hooks)    | No class components.                            |
 | Language    | **TypeScript — `strict: true` (mandatory)**  | Non-negotiable for financial data.              |
-| Build tool  | **Vite**                                     | Env vars exposed to the client use `VITE_`.     |
-| Styling     | **Tailwind CSS**                             | Mobile-first utilities; no ad-hoc inline styles.|
+| Framework   | **Next.js (App Router)**                     | Server Components by default; `'use client'` only on interactive leaves. `next build`. |
+| Styling     | **Tailwind CSS v4**                          | Mobile-first utilities; Identity Kit tokens in `src/app/globals.css`. |
 | Runtime     | **Node.js (LTS)**                            | Pin via `.nvmrc` / `engines` in `package.json`. |
 
 Required `tsconfig` compiler flags: `strict`, `noImplicitAny`,
@@ -70,18 +70,19 @@ Required `tsconfig` compiler flags: `strict`, `noImplicitAny`,
 `exactOptionalPropertyTypes`.
 
 Tooling around the stack: **oxlint** (lint), **Vitest** + jsdom + Testing Library
-(tests), **husky** + lint-staged + commitlint (git hooks), GitHub Actions (CI).
+(tests; Vite is kept only as the Vitest engine via `vite.config.ts`), **husky** +
+lint-staged + commitlint (git hooks), GitHub Actions (CI). Capstone spec: [`SPEC.md`](./SPEC.md).
 
 ### Commands
 
 | Command             | Use it to                                                  |
 | ------------------- | ---------------------------------------------------------- |
-| `npm run dev`       | Start the Vite dev server                                  |
-| `npm run typecheck` | Strict-mode type check (`tsc -b`)                          |
-| `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports)|
-| `npm test`          | Run Vitest once                                            |
-| `npm run build`     | Typecheck + production build                               |
-| `npm run test:e2e`  | After `build`: Disburse + Simulate above the fold at 360×740 and 1280×800 (Playwright) |
+| `npm run dev`       | Start the Next.js dev server (App Router)                  |
+| `npm run typecheck` | Strict-mode type check (`tsc --noEmit`)                    |
+| `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports except Next route files)|
+| `npm test`          | Run Vitest once (248 tests in `src/features/`)             |
+| `npm run build`     | Production build (`next build`)                            |
+| `npm run test:e2e`  | After `build`: above-the-fold on `/` + all 5 routes responsive at 375px/1280px (Playwright, `next start`) |
 
 **Before saying any change is done, run `typecheck`, `lint`, and `test`, and
 report the results.** CI runs the same four steps on every push and pull request.

@@ -13,11 +13,18 @@
   },
   "overrides": [
     {
-      "files": ["*.config.ts", "*.config.js"],
+      "files": ["*.config.ts", "*.config.js", "*.config.mjs"],
       "rules": {
         "import/no-default-export": "off"
       }
+    },
+    {
+      "files": ["src/app/**/*.ts", "src/app/**/*.tsx"],
+      "rules": {
+        "import/no-default-export": "off",
+        "react/only-export-components": "off"
+      }
     }
   ],
-  "ignorePatterns": ["dist", "node_modules"]
+  "ignorePatterns": ["dist", "node_modules", ".next"]
 }

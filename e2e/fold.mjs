@@ -1,44 +1,57 @@
 /**
- * Above-the-fold check for the One Action (CLAUDE.md §0), in a real browser.
+ * Above-the-fold + responsiveness check for the Next.js app, in a real browser.
  *
- * On a phone (360×740) and a laptop (1280×800), the Disburse and
- * "Simulate double-click / network retry" buttons must be fully visible on the
- * first screen, with no scrolling. Then Simulate must produce exactly one
- * `201 Created` and one `201 Idempotent replay`: the second payout bounces.
+ * 1. On `/` at phone (360×740) and laptop (1280×800), the Disburse and
+ *    "Simulate double-click / network retry" buttons are fully above the fold,
+ *    and Simulate produces exactly one 201 Created + one 201 Idempotent replay.
+ * 2. All 5 SPEC.md routes load at 375px and 1280px with zero horizontal overflow.
  *
- * Fonts: the app loads Plus Jakarta Sans from Google Fonts, but a low-end
- * Android phone on a slow network (our audience, CLAUDE.md §3.1) — and the CI
- * runner, which can't reach that CDN — paint the fallback font first. The
- * fallback is TALLER, so the fold must survive it. This check blocks the web
- * fonts and forces DejaVu Sans (the tallest sans shipped on the CI runner and
- * in this image), so it measures that worst case on every machine. Passing here
- * means passing with Plus Jakarta Sans too. A DejaVu regression failed in CI
- * while this check passed locally, because local Chromium fell back to a
- * shorter font (commit 0d632e2).
+ * Fonts: the app self-hosts Plus Jakarta Sans / JetBrains Mono, but a low-end
+ * Android phone paints the fallback first, and the fallback is TALLER. This check
+ * forces DejaVu Sans (the tallest sans on the CI runner and in this image) so it
+ * measures that worst case on every machine.
  *
- * Run after `npm run build`:  npm run test:e2e
+ * Run after `npm run build` (it starts the production server itself):
+ *   npm run test:e2e
  */
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { chromium } from 'playwright'
-import { preview } from 'vite'
 
-const VIEWPORTS = [
-  { name: 'phone', width: 360, height: 740 },
-  { name: 'laptop', width: 1280, height: 800 },
-]
+const PORT = 4173
+const BASE = `http://localhost:${PORT}`
 const BUTTONS = [/^Disburse$/, /^Simulate double-click \/ network retry$/]
-// Worst-case fallback: the web font is unavailable and the tallest system sans paints instead.
-const FORCE_FALLBACK = `:root{--font-sans:'DejaVu Sans',sans-serif!important;--font-mono:'DejaVu Sans Mono',monospace!important}`
+const ROUTES = ['/', '/underwriting', '/ledger', '/advisories', '/health']
+const FORCE_FALLBACK = `:root{--font-plus-jakarta:'DejaVu Sans';--font-jetbrains:'DejaVu Sans Mono'}`
 
-const server = await preview({ preview: { port: 4173, strictPort: true }, logLevel: 'silent' })
-const url = server.resolvedUrls?.local[0] ?? 'http://localhost:4173/'
+async function waitForServer(timeoutMs = 60_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(BASE, { cache: 'no-store' })
+      if (res.ok) return
+    } catch {
+      // not up yet
+    }
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  throw new Error(`Next server did not start on ${BASE} within ${timeoutMs}ms`)
+}
+
+const server = spawn('node_modules/.bin/next', ['start', '-p', String(PORT)], { stdio: 'ignore' })
 const browser = await chromium.launch()
 const failures = []
 
 try {
-  for (const viewport of VIEWPORTS) {
+  await waitForServer()
+
+  // 1. Above-the-fold on `/`.
+  for (const viewport of [
+    { name: 'phone', width: 360, height: 740 },
+    { name: 'laptop', width: 1280, height: 800 },
+  ]) {
     const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } })
-    await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
-    await page.goto(url)
+    await page.goto(BASE, { waitUntil: 'networkidle' })
     await page.addStyleTag({ content: FORCE_FALLBACK })
     await page.evaluate(() => document.fonts.ready)
 
@@ -53,19 +66,34 @@ try {
     await page.getByRole('button', { name: BUTTONS[1] }).click()
     await page.getByText(/201 Idempotent replay/).first().waitFor()
     const entries = await page.getByTestId('request-log-entry').allInnerTexts()
-    const created = entries.filter((text) => text.includes('201 Created')).length
-    const replayed = entries.filter((text) => text.includes('201 Idempotent replay')).length
+    const created = entries.filter((t) => t.includes('201 Created')).length
+    const replayed = entries.filter((t) => t.includes('201 Idempotent replay')).length
     const ok = created === 1 && replayed === 1
     process.stdout.write(`${ok ? '✓' : '✗'} ${viewport.name}: Simulate → ${created} created, ${replayed} replayed\n`)
     if (!ok) failures.push(`${viewport.name}: expected 1 created + 1 replay, got ${created} + ${replayed}`)
     await page.close()
   }
+
+  // 2. Every route loads with no horizontal overflow at 375px and 1280px.
+  for (const width of [375, 1280]) {
+    const page = await browser.newPage({ viewport: { width, height: 900 } })
+    for (const route of ROUTES) {
+      const res = await page.goto(`${BASE}${route}`, { waitUntil: 'networkidle' })
+      const status = res?.status() ?? 0
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      const ok = status === 200 && overflow <= 0
+      process.stdout.write(`${ok ? '✓' : '✗'} ${width}px ${route}: HTTP ${status}, horizontal overflow ${overflow}px\n`)
+      if (!ok) failures.push(`${width}px ${route}: status ${status}, overflow ${overflow}px`)
+    }
+    await page.close()
+  }
 } finally {
   await browser.close()
-  await server.close()
+  server.kill('SIGTERM')
+  await once(server, 'exit').catch(() => {})
 }
 
 if (failures.length > 0) {
-  console.error(`\nFold check failed:\n- ${failures.join('\n- ')}`)
+  console.error(`\nChecks failed:\n- ${failures.join('\n- ')}`)
   process.exit(1)
 }

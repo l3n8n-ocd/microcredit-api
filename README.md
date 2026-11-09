@@ -44,6 +44,7 @@ act on.
 | Area | Status |
 | ---- | ------ |
 | Toolchain, lint, tests, git hooks, CI | ✅ In place |
+| Next.js App Router skeleton (5 routed screens) | ✅ Built: `/`, `/underwriting`, `/ledger`, `/advisories`, `/health` (see [`SPEC.md`](./SPEC.md)) |
 | `Disburse` flow with `Idempotency-Key` + `If-Match` | ✅ Built and tested in [`src/features/disbursement/`](./src/features/disbursement/), against an in-memory mock API (no real backend or wallet yet) |
 | Loan state machine | ✅ Built and tested: all 10 states below as one discriminated union in [`loanStateMachine.ts`](./src/features/disbursement/loanStateMachine.ts); 100 `(state, event)` pairs tested, 88 illegal ones rejected as a typed `409` |
 | Double-entry ledger | ✅ Built and tested: disbursement, repayment (principal + interest) and compensating-reversal entries in [`ledger.ts`](./src/features/disbursement/ledger.ts), each checked for `Σ debits === Σ credits`; in-memory mock API |
@@ -144,13 +145,13 @@ npm run dev
 
 | Script              | What it does                                         |
 | ------------------- | ---------------------------------------------------- |
-| `npm run dev`       | Start the Vite dev server                            |
-| `npm run build`     | Typecheck, then build for production into `dist/`    |
-| `npm run preview`   | Serve the production build locally                   |
+| `npm run dev`       | Start the Next.js dev server (App Router)            |
+| `npm run build`     | Production build (`next build`)                      |
+| `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once                            |
-| `npm run test:e2e`  | After `build`: check Disburse + Simulate fit on the first screen (Playwright) |
+| `npm test`          | Run the Vitest suite once (248 tests)                |
+| `npm run test:e2e`  | After `build`: above-the-fold on `/` + all 5 routes at 375px/1280px with no overflow (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
 Conventional Commits (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`).
@@ -241,6 +242,15 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **CTA ladder:** every micro-CTA funnels to the One Action — test the live double-click sandbox, then
     book a 15-minute walkthrough.
   - **Honest gather list:** what is ready now vs. still needed, each with a build-week fallback.
+- **FE-04 / FE-05 · Capstone Skeleton, Deployed (Week 3 Frontend AI Engineering):** [`SPEC.md`](./SPEC.md)
+  - **Migrated to Next.js 16 (App Router)** — Server Components by default, `'use client'` only on the
+    interactive Disbursement & Underwriting islands; all 248 Vitest tests and the above-the-fold
+    Playwright check still pass.
+  - **5 routed screens:** [`/`](https://microcredit-api-beta.vercel.app/) (idempotent disburse sandbox),
+    `/underwriting`, `/ledger`, `/advisories`, and `/health` (async Server Component + `/api/health`).
+  - **Identity Kit design tokens** in `src/app/globals.css`, fonts self-hosted via `next/font/local`.
+  - **Zero-secrets env structure:** [`.env.example`](./.env.example) with placeholders; `.env*`
+    gitignored.
 
 ## License
 
