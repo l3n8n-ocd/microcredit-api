@@ -232,6 +232,15 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **Killed darling:** the Week 1 neon isometric illustration. It inverts the light palette and fakes
     the evidence it decorates.
   - **Bio slot:** reserved for a real photo (TODO).
+- **The Through-Line: Map Content & CTAs · Week 3 General AI Fluency:** [`docs/THE_THROUGH_LINE.md`](./docs/THE_THROUGH_LINE.md)
+  - **One-line claim:** "I build loan disbursement flows that cannot pay a borrower twice" — the sharpened
+    winner of 10 candidates; the brief's "frontend and full-stack" draft is shown being cut for the "and"
+    trap and an unearned "full-stack".
+  - **Content map:** 4 sections (Hero sandbox → flagship cases strongest-first → bio → act), each with a
+    named CTA.
+  - **CTA ladder:** every micro-CTA funnels to the One Action — test the live double-click sandbox, then
+    book a 15-minute walkthrough.
+  - **Honest gather list:** what is ready now vs. still needed, each with a build-week fallback.
 
 ## License
 

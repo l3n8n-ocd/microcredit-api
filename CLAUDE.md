@@ -302,6 +302,18 @@ the whole 10-week build. Paste the same two lines into the Claude Project's inst
 Accent `059669` is never text on `F8FAFC` (3.60:1 fails AA). Use it as a fill under `0F172A` text
 (4.74:1), a border, a dot, or a focus ring.
 
+### 9.5 One-Line Claim (portfolio headline)
+
+Source: [`docs/THE_THROUGH_LINE.md`](./docs/THE_THROUGH_LINE.md). The portfolio headline is the §0 One
+Claim, word for word:
+
+> **"I build loan disbursement flows that cannot pay a borrower twice."**
+
+Do not reopen the "and" trap. The variant "frontend **and** full-stack payment flows" is rejected: it
+lists two overlapping roles, and "full-stack" is unearned while MicroCredit API is a frontend on an
+in-memory mock server (`src/features/disbursement/disbursementServer.ts`). Every section's call to action
+ladders to the One Action: test the live double-click sandbox, then book a 15-minute walkthrough.
+
 ---
 
 ## 10. Claude Project Custom Instructions & FL-02 → FL-04 Target Tasks
