@@ -18,7 +18,7 @@ export function App() {
   }, [])
 
   return (
-    <main className="min-h-dvh bg-slate-950 px-4 py-8 text-slate-100 sm:px-8 sm:py-12">
+    <main className="min-h-dvh bg-slate-950 px-4 py-5 text-slate-100 sm:px-8 sm:py-12">
       <div className="mx-auto max-w-3xl">
         <p className="font-mono text-xs font-semibold tracking-widest text-emerald-400 uppercase">
           Disbursement demo · in-memory mock API

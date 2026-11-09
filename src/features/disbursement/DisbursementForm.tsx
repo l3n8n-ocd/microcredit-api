@@ -306,12 +306,12 @@ export function DisbursementForm({
   const ledgerTotals = journalTotals(ledgerLines)
 
   return (
-    <div className="mt-8 space-y-8">
+    <div className="mt-6 space-y-8 sm:mt-8">
       <form
         noValidate
         aria-labelledby={`${id}-title`}
         onSubmit={(event) => void handleSubmit(event)}
-        className="space-y-5 rounded-lg border border-slate-800 bg-slate-900/60 p-4 sm:p-6"
+        className="space-y-4 rounded-lg border border-slate-800 bg-slate-900/60 p-4 sm:space-y-5 sm:p-6"
       >
         <h2 id={`${id}-title`} className="text-xl font-semibold">
           Disburse an approved loan
