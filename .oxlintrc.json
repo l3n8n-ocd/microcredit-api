@@ -1,6 +1,11 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "import", "oxc"],
+  "plugins": [
+    "react",
+    "typescript",
+    "import",
+    "oxc"
+  ],
   "categories": {
     "correctness": "error"
   },
@@ -8,23 +13,56 @@
     "typescript/no-explicit-any": "error",
     "import/no-default-export": "error",
     "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }],
-    "no-console": ["error", { "allow": ["warn", "error"] }]
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ],
+    "no-console": [
+      "error",
+      {
+        "allow": [
+          "warn",
+          "error"
+        ]
+      }
+    ]
   },
   "overrides": [
     {
-      "files": ["*.config.ts", "*.config.js", "*.config.mjs"],
+      "files": [
+        "*.config.ts",
+        "*.config.js",
+        "*.config.mjs"
+      ],
       "rules": {
         "import/no-default-export": "off"
       }
     },
     {
-      "files": ["src/app/**/*.ts", "src/app/**/*.tsx"],
+      "files": [
+        "src/app/**/*.ts",
+        "src/app/**/*.tsx"
+      ],
       "rules": {
         "import/no-default-export": "off",
         "react/only-export-components": "off"
       }
+    },
+    {
+      "files": [
+        "workflows/**/*.mjs",
+        "workflows/**/*.js"
+      ],
+      "rules": {
+        "no-console": "off"
+      }
     }
   ],
-  "ignorePatterns": ["dist", "node_modules", ".next"]
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    ".next"
+  ]
 }

@@ -1,0 +1,120 @@
+{
+  "name": "FL-04 \u2014 Source-Grounded Security & Fintech Advisory Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fl-04-advisory",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "node-trigger",
+      "name": "Raw Input Trigger (Gather & Secret Pre-Scrub)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "fl-04-advisory",
+      "notes": "POST raw verified PoC notes here. A reviewer supplies the input; do not paste real secrets."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.LLM_ENDPOINT}}",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"system\":\"Step 1 \u2014 source-grounding: extract verified CWE/RFC/spec evidence and the exact sink with inline citations. Zero speculation.\",\"input\":{{ JSON.stringify($json.body) }}}",
+        "options": {}
+      },
+      "id": "node-step1",
+      "name": "Step 1 \u2014 Source Grounding & Sink/Invariant Synthesis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        300
+      ],
+      "notes": "LLM node (NotebookLM / Claude). Needs the reviewer's own LLM_ENDPOINT + credential. Emits <synthesis_handoff>."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.LLM_ENDPOINT}}",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"system\":\"Step 3 \u2014 draft a 6-section Markdown advisory from the synthesis handoff, using the FL-02 v5 schema, unified -/+ diffs, and <REDACTED_*> tokens only.\",\"handoff\":{{ JSON.stringify($json) }}}",
+        "options": {}
+      },
+      "id": "node-step3",
+      "name": "Step 3 \u2014 Structured Advisory Drafter (FL-02 v5 schema)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        300
+      ],
+      "notes": "LLM node. Consumes the handoff, produces {advisory: '<markdown>'}."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Step 4 \u2014 Automated Critic & Redaction Gate (deterministic; mirrors run-pipeline-verify.mjs).\nconst md = String($json.advisory || $json.body?.advisory || '');\nconst LEAKS = [\n  ['JWT', /eyJ[A-Za-z0-9_-]{6,}\\.[A-Za-z0-9_-]{6,}\\.[A-Za-z0-9_-]{4,}/],\n  ['RFC1918 IP', /\\b(?:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|172\\.(?:1[6-9]|2\\d|3[01])\\.\\d{1,3}\\.\\d{1,3})\\b/],\n  ['Bearer', /Bearer\\s+[A-Za-z0-9._-]{10,}/i],\n  ['Secret prefix', /\\b(?:sk-ant-|sk_live_|whsec_|stg_whk_)[A-Za-z0-9_-]{6,}/],\n  ['SHA-256 HMAC', /\\b[0-9a-f]{64}\\b/],\n  ['MSISDN', /\\b09\\d{9}\\b/],\n];\nconst SECTIONS = [/## 1\\. Metadata & CVSS v3\\.1/, /## 2\\. Executive Summary/, /## 3\\. Root Cause & Attack Surface/, /## 4\\. (?:Proof-of-Concept|PoC).*Reproduction/i, /## 5\\. Remediation Diff/, /## 6\\. Secret & Factuality Audit/];\nconst leaks = LEAKS.filter(([, re]) => re.test(md)).map(([n]) => n);\nconst missing = SECTIONS.filter((re) => !re.test(md)).length;\nconst hasVector = /CVSS:3\\.1\\/AV:[NALP]\\/AC:[LH]\\/PR:[NLH]\\/UI:[NR]\\/S:[UC]\\/C:[NLH]\\/I:[NLH]\\/A:[NLH]/.test(md);\nconst pass = leaks.length === 0 && missing === 0 && hasVector;\nreturn [{ json: { pass, leaks, missing_sections: missing, cvss_vector_valid: hasVector, advisory: pass ? md : null } }];\n"
+      },
+      "id": "node-gate",
+      "name": "Step 4 \u2014 Automated Critic & Redaction Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        300
+      ],
+      "notes": "Deterministic gate. Works on import with no credentials. Mirrors run-pipeline-verify.mjs."
+    }
+  ],
+  "connections": {
+    "Raw Input Trigger (Gather & Secret Pre-Scrub)": {
+      "main": [
+        [
+          {
+            "node": "Step 1 \u2014 Source Grounding & Sink/Invariant Synthesis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 1 \u2014 Source Grounding & Sink/Invariant Synthesis": {
+      "main": [
+        [
+          {
+            "node": "Step 3 \u2014 Structured Advisory Drafter (FL-02 v5 schema)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Step 3 \u2014 Structured Advisory Drafter (FL-02 v5 schema)": {
+      "main": [
+        [
+          {
+            "node": "Step 4 \u2014 Automated Critic & Redaction Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

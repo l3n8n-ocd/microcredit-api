@@ -264,6 +264,12 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
     (chosen), full-stack + Postgres + CMS.
   - **Pressure-tested** against what breaks, what to maintain, two-week feasibility, and whether it shows
     the work — plus a first-person rationale and the honest "not yet" on a backend.
+- **FL-04 · Ship an Automation Workflow v2 (Week 4 General AI Fluency):** [`docs/FL-04_AUTOMATION_WORKFLOW.md`](./docs/FL-04_AUTOMATION_WORKFLOW.md) · artifacts in [`workflows/fl-04-advisory-pipeline/`](./workflows/fl-04-advisory-pipeline/)
+  - **4-step advisory pipeline** (Gather → Synthesize → Draft → Critic & Redaction Gate) with defined
+    handoff schemas, an importable **n8n workflow JSON**, and a zero-dependency runner.
+  - **5 documented runs** (Node2Shell, idempotency replay, centavo drift, stale If-Match, a brand-new
+    webhook-HMAC-replay input) all pass the deterministic gate: `node workflows/fl-04-advisory-pipeline/run-pipeline-verify.mjs`.
+  - **Honest time accounting** (break-even at Run #4) and 4 named failure points with the human-in-the-loop checklist.
 
 ## License
 
