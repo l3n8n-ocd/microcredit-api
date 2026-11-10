@@ -52,6 +52,23 @@
     },
     {
       "files": [
+        "src/app/api/**/*.ts"
+      ],
+      "rules": {
+        "no-console": [
+          "error",
+          {
+            "allow": [
+              "info",
+              "warn",
+              "error"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "workflows/**/*.mjs",
         "workflows/**/*.js"
       ],

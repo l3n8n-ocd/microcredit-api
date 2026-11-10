@@ -11,6 +11,11 @@
  *   - the local rule engine otherwise, streamed one token every ~22 ms.
  * The first frame always names the engine, so the UI can label the reply honestly.
  *
+ * Rate limit: requests that would reach a hosted (paid) model pass an in-memory
+ * per-client limiter first and get `429` + `Retry-After` when over it. The
+ * local engine costs nothing and is not limited. See src/lib/ai/rate-limit.ts
+ * for what an in-memory limit does and does not guarantee.
+ *
  * Cancellation: when the browser aborts its fetch (the Stop button), Next
  * aborts `req.signal` and/or cancels the response stream. Both feed one
  * AbortController, which stops the model call or the local token loop. No
@@ -26,6 +31,7 @@ import {
   type WireMessage,
 } from '../../../features/ai-copilot/chatProtocol.ts'
 import { streamLocalReply } from '../../../lib/ai/local-engine.ts'
+import { chatRateLimiter, clientKey, describeWait } from '../../../lib/ai/rate-limit.ts'
 import {
   MODEL_CONFIG,
   buildSystemPrompt,
@@ -60,10 +66,34 @@ async function streamFromLocalEngine(messages: readonly WireMessage[], signal: A
   if (!signal.aborted) send({ type: 'done', finishReason: 'stop' })
 }
 
+/** How one hosted-model request ended, as seen by the server. */
+type ModelOutcome = 'done' | 'aborted' | 'error' | 'fallback'
+
 /**
- * Streams a hosted model. Returns how many text deltas were sent before it
- * ended or threw, so the caller can tell "failed before the first token"
- * (safe to fall back) from "failed halfway" (must report an error).
+ * One structured log line per hosted-model request: counts and timing only.
+ * No prompt, no reply text, no IP, no key (CLAUDE.md §8).
+ *
+ * This is how server-side cancellation is measured on a real host. Press Stop
+ * one second into a long reply, then read the line: `outcome: "aborted"` with a
+ * small `deltas` means the disconnect reached this function and the provider
+ * call was cancelled. `outcome: "done"` with a full-length `deltas` means the
+ * host never told us the client left, and the whole reply was generated.
+ */
+function logModelRequest(entry: {
+  readonly outcome: ModelOutcome
+  readonly engine: string
+  readonly deltas: number
+  readonly outputTokens: number | null
+  readonly ms: number
+}): void {
+  console.info(JSON.stringify({ event: 'chat.model', ...entry }))
+}
+
+/**
+ * Streams a hosted model and returns the output token count the provider
+ * reported (null if it reported none). `sent.count` is updated as deltas go
+ * out, so the caller can tell "failed before the first token" (safe to fall
+ * back) from "failed halfway" (must report an error) even when this throws.
  */
 async function streamFromModel(
   engine: HostedEngine,
@@ -71,7 +101,7 @@ async function streamFromModel(
   signal: AbortSignal,
   send: Send,
   sent: { count: number },
-): Promise<void> {
+): Promise<number | null> {
   const result = streamText({
     model: engine.model,
     instructions: buildSystemPrompt(),
@@ -86,17 +116,20 @@ async function streamFromModel(
   })
 
   let finishReason = 'stop'
+  let outputTokens: number | null = null
   for await (const part of result.stream) {
     if (part.type === 'text-delta') {
       sent.count += 1
       send({ type: 'token', text: part.text })
     } else if (part.type === 'finish') {
       finishReason = part.finishReason
+      outputTokens = part.totalUsage.outputTokens ?? null
     } else if (part.type === 'error') {
       throw part.error
     }
   }
   if (!signal.aborted) send({ type: 'done', finishReason })
+  return outputTokens
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -114,7 +147,19 @@ export async function POST(req: Request): Promise<Response> {
   // 2. Pick the engine. Keys are read here, on the server, per request.
   const engine = resolveChatEngine()
 
-  // 3. One abort signal for "the client went away", whichever way the platform reports it.
+  // 3. Rate-limit anything that would spend money. Checked before the stream
+  //    opens, so an over-limit client gets a plain 429, not a half-open stream.
+  if (engine.kind !== 'local') {
+    const verdict = chatRateLimiter.check(clientKey(req.headers))
+    if (!verdict.ok) {
+      return Response.json(
+        { error: `Too many requests from this network. Try again in ${describeWait(verdict.retryAfterSeconds)}.` },
+        { status: 429, headers: { 'Retry-After': String(verdict.retryAfterSeconds) } },
+      )
+    }
+  }
+
+  // 4. One abort signal for "the client went away", whichever way the platform reports it.
   const abort = new AbortController()
   const onRequestAbort = (): void => abort.abort()
   if (req.signal.aborted) abort.abort()
@@ -136,18 +181,28 @@ export async function POST(req: Request): Promise<Response> {
         }
 
         const sent = { count: 0 }
+        const startedAt = Date.now()
+        const log = (outcome: ModelOutcome, outputTokens: number | null): void =>
+          logModelRequest({ outcome, engine: engine.label, deltas: sent.count, outputTokens, ms: Date.now() - startedAt })
+
         try {
-          await streamFromModel(engine, messages, abort.signal, send, sent)
+          const outputTokens = await streamFromModel(engine, messages, abort.signal, send, sent)
+          log(abort.signal.aborted ? 'aborted' : 'done', outputTokens)
         } catch (error) {
-          if (abort.signal.aborted) return
+          if (abort.signal.aborted) {
+            log('aborted', null)
+            return
+          }
           // Log the error class only. Never the prompt, the reply or the key (CLAUDE.md §8).
           console.error('[api/chat] model stream failed:', error instanceof Error ? error.name : 'unknown error')
           if (sent.count > 0) {
+            log('error', null)
             send({ type: 'error', message: 'The model stopped responding part-way through. The partial reply is kept.' })
             return
           }
           // Nothing reached the user yet (bad key, rate limit, provider outage):
           // answer from the local engine and say so, instead of showing a dead chat.
+          log('fallback', null)
           send({ type: 'meta', engine: { kind: 'local', label: 'local rule engine (model call failed)' } })
           await streamFromLocalEngine(messages, abort.signal, send)
         }

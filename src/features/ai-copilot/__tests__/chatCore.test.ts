@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CHAT_LIMITS, createSseParser, encodeSseFrame, type ChatStreamEvent } from '../chatProtocol.ts'
 import { chatReducer, createInitialState, toWireHistory, type ChatState } from '../chatReducer.ts'
+import { fetchChatTransport } from '../chatTransport.ts'
 import { messageText, type ChatMessage } from '../chatTypes.ts'
 import { parseInline, parseStreamingMarkdown } from '../streamingMarkdownParser.ts'
 
@@ -200,6 +201,50 @@ describe('parseStreamingMarkdown — never shows half a marker', () => {
     expect(parseStreamingMarkdown('### Nena\n\n1. first\n2. second', false)).toEqual([
       { type: 'heading', level: 3, inline: [{ type: 'text', text: 'Nena' }] },
       { type: 'list', ordered: true, items: [[{ type: 'text', text: 'first' }], [{ type: 'text', text: 'second' }]] },
+    ])
+  })
+})
+
+describe('fetchChatTransport', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('rejects with the server message on 429, so the chat can show how long to wait', async () => {
+    const body = { error: 'Too many requests from this network. Try again in 50 seconds.' }
+    vi.stubGlobal('fetch', async () => Response.json(body, { status: 429, headers: { 'Retry-After': '50' } }))
+    const events: ChatStreamEvent[] = []
+    await expect(
+      fetchChatTransport({
+        messages: [{ role: 'user', content: 'hi' }],
+        signal: new AbortController().signal,
+        onEvent: (event) => events.push(event),
+      }),
+    ).rejects.toThrow(body.error)
+    expect(events).toEqual([])
+  })
+
+  it('decodes a streamed body whose multi-byte characters are split across chunks', async () => {
+    const frames = new TextEncoder().encode(
+      encodeSseFrame({ type: 'token', text: '₱5,000.00 Σ' }) + encodeSseFrame({ type: 'done', finishReason: 'stop' }),
+    )
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // One byte per chunk: every multi-byte character arrives in pieces.
+        for (const byte of frames) controller.enqueue(new Uint8Array([byte]))
+        controller.close()
+      },
+    })
+    vi.stubGlobal('fetch', async () => new Response(stream, { headers: { 'Content-Type': 'text/event-stream' } }))
+    const events: ChatStreamEvent[] = []
+    await fetchChatTransport({
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: new AbortController().signal,
+      onEvent: (event) => events.push(event),
+    })
+    expect(events).toEqual([
+      { type: 'token', text: '₱5,000.00 Σ' },
+      { type: 'done', finishReason: 'stop' },
     ])
   })
 })

@@ -34,7 +34,8 @@ Server Components by default; `'use client'` only on interactive leaves.
 
 - **Domain stays framework-free.** All business logic lives in `src/features/` (`disbursement`,
   `scoring`, `health`) and `src/utils/`, imported by both Server and Client components. The suite is
-  308 tests: 248 on the domain and UI, 60 on the FE-06 chat (`src/features/ai-copilot/`, `src/lib/ai/`).
+  324 tests: 248 on the domain and UI, 76 on the FE-06 chat, its rate limiter and its env handling
+  (`src/features/ai-copilot/`, `src/lib/ai/`, `src/utils/env.ts`).
   The Next.js migration added routing and a shell; it changed no domain logic and removed no test.
 - **Server/client boundary.** Server code imports the *pure* modules directly
   (`ledger.ts`, `scoreEngine.ts`), never the feature barrels, which also re-export `'use client'`
@@ -58,12 +59,15 @@ Server Components by default; `'use client'` only on interactive leaves.
 | Route handler (SSE, abort, validation) | [`src/app/api/chat/route.ts`](./src/app/api/chat/route.ts) |
 | Model config, system prompt, starter prompts, key handling (`server-only`) | [`src/lib/ai/underwriting-model.ts`](./src/lib/ai/underwriting-model.ts) |
 | Local rule engine (no-key fallback, computed from domain functions) | [`src/lib/ai/local-engine.ts`](./src/lib/ai/local-engine.ts) |
+| Rate limiter (in-memory sliding window: 10 a minute, 100 a day per client, hosted model only) | [`src/lib/ai/rate-limit.ts`](./src/lib/ai/rate-limit.ts) |
 | Chat UI (`'use client'`) | [`src/features/ai-copilot/StreamingUnderwritingChat.tsx`](./src/features/ai-copilot/StreamingUnderwritingChat.tsx) |
 | Streaming-safe Markdown | [`StreamingMarkdown.tsx`](./src/features/ai-copilot/StreamingMarkdown.tsx) + [`streamingMarkdownParser.ts`](./src/features/ai-copilot/streamingMarkdownParser.ts) |
 | State machine, wire protocol, transport, persistence | [`chatReducer.ts`](./src/features/ai-copilot/chatReducer.ts), [`chatProtocol.ts`](./src/features/ai-copilot/chatProtocol.ts), [`chatTransport.ts`](./src/features/ai-copilot/chatTransport.ts), [`conversationStore.ts`](./src/features/ai-copilot/conversationStore.ts) |
 
-**Not yet shown:** a hosted model answering on the live URL (no key is set there), and any rate limit
-on `/api/chat`. With no key the reply comes from the local rule engine and is labelled as such.
+**Not yet shown:** a hosted model answering on the live URL (no real key is active there), and a rate
+limit that holds across server instances: the limiter is in-memory, so it slows abuse but the spend cap
+on the provider account is the guarantee. With no key the reply comes from the local rule engine and is
+labelled as such.
 
 Each AI route is server-only and keys never reach the client. The local engine computes every number
 from the domain functions; the hosted-model path is constrained by a system prompt generated from the
@@ -80,7 +84,7 @@ same functions, and FE-07 tools will replace that snapshot (`CLAUDE.md` §9.2 ru
 
 ## Testing
 
-- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 308 tests),
+- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 324 tests),
   `npm run build` (next build), `npm run test:e2e` (Playwright: above-the-fold on `/` under the
   worst-case fallback font, all 5 routes at 375px and 1280px with zero horizontal overflow, and 13 AI
   Copilot checks per width against the real `/api/chat`: token-by-token streaming, Stop, send-again,

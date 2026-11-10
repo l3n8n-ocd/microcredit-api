@@ -26,9 +26,9 @@ Read this first. It is the honest scope of the deliverable (`CLAUDE.md` §9.2 ru
 | "Stop, then send again" works for any number of turns | Component test loops stop → send 5 times; e2e sends a follow-up right after Stop | ✅ Verified |
 | Multi-turn context is sent and used | Component test asserts the full history on request 2; e2e: "and for Liza?" resolves to Liza's score | ✅ Verified |
 | The hosted-model path calls the AI SDK's `streamText` | Route test drives the real `streamText` with the SDK's `MockLanguageModelV4` | ✅ Verified against a mock |
-| A real Claude or Gemini model answers on the live URL | No API key is set in this repo's CI or, as of this commit, on Vercel | ⏳ **TODO:** set a key, confirm the engine label shows a model ID |
-| Server-side cancellation on Vercel stops the model call | Unit test proves the abort signal reaches the model call; Vercel's own disconnect behaviour was not measured | ⏳ **TODO** |
-| Rate limiting on `/api/chat` | None. Per-request caps only (§6) | ❌ Not built |
+| A real Claude or Gemini model answers on the live URL | The live engine label still reads `local rule engine (no API key set)`. `ANTHROPIC_API_KEY` exists on Vercel but its value is not a usable key (empty or the `.env.example` placeholder) | ⏳ **TODO:** set the real key, redeploy, confirm `/api/health` shows `ANTHROPIC_API_KEY: true` and the label shows a model ID |
+| Server-side cancellation on Vercel stops the model call | Unit test proves the abort signal reaches the model call. Each hosted request now writes one `chat.model` log line with its outcome (§6), but no hosted request has run on Vercel yet | ⏳ **TODO:** press Stop on the live URL, read the log line |
+| Rate limiting on `/api/chat` | In-memory sliding window, 10 a minute and 100 a day per client; route test: 10 replies, then `429` and the model is not called | ✅ Built, per server instance only (§6) |
 
 **With no key set, the reply does not come from a language model.** It comes from a local rule engine,
 [`src/lib/ai/local-engine.ts`](../src/lib/ai/local-engine.ts), and the UI says so under every reply:
@@ -209,17 +209,53 @@ A follow-up with no topic keyword inherits the earlier topic ("and for Liza?", "
 and lists what it can answer. If a hosted model fails before its first token (bad key, rate limit), the
 route falls back to this engine and relabels the reply `local rule engine (model call failed)`.
 
-## 6 · Before setting an API key on the public URL
+## 6 · Running it with a paid key
 
-`/api/chat` has no authentication and no rate limit. With a paid key on Vercel, anyone who finds the URL
-can spend it. What bounds one request today:
+`/api/chat` has no authentication, so three things bound what a key can cost.
 
-- at most 24 messages, 2,000 characters per user message (`CHAT_LIMITS`, enforced on both sides);
-- `maxOutputTokens: 4096` per reply;
-- `maxRetries: 1`.
+**1. A per-client rate limit** ([`src/lib/ai/rate-limit.ts`](../src/lib/ai/rate-limit.ts)). A request
+that would reach a hosted model first passes a sliding-window log: **10 a minute and 100 a day** per
+client IP. Over the limit, the route returns `429` with `Retry-After` before any stream opens, and the
+chat shows "Too many requests from this network. Try again in 50 seconds." The local engine is free, so
+it is not limited.
 
-**TODO before adding a key:** a per-IP limit on the route, and a spend cap on the provider account. For a
-public demo, set `ANTHROPIC_MODEL=claude-haiku-5-5`; the default is `claude-opus-5-5`.
+- *Sliding window, not fixed window.* A fixed-window counter resets on the clock minute, so 10 requests
+  at 0:59 and 10 more at 1:01 both pass. The log measures back from "now", so that burst is refused.
+- *Rejected requests are not counted.* Hammering a full window does not push the retry time out.
+- *What it does not guarantee.* The log lives in one server instance's memory. Vercel can run several
+  instances and a cold start empties the log, so the real ceiling is the limit times the number of warm
+  instances. It slows a script down. It is not a spend guarantee. A shared store (Upstash Redis) would
+  make it exact; that is not built.
+
+**2. Per-request caps.** At most 24 messages and 2,000 characters per user message (`CHAT_LIMITS`,
+enforced on both sides), `maxOutputTokens: 4096`, `maxRetries: 1`.
+
+**3. The provider spend limit.** This is the guarantee, and it is set outside this repo: a dedicated key
+in its own workspace with a low monthly limit. For a public demo, also set
+`ANTHROPIC_MODEL=claude-haiku-5-5`; the default is `claude-opus-5-5`.
+
+### Checking the key took effect
+
+`GET /api/health` reports `ANTHROPIC_API_KEY: true` only for a real value. An empty value or a
+`.env.example` placeholder reads `false`, and the chat stays on the local engine
+([`src/utils/env.ts`](../src/utils/env.ts)). Env changes on Vercel apply to new deployments only.
+
+### Measuring server-side cancellation
+
+Every hosted-model request writes one line to the function log. It holds counts and timing only: no
+prompt, no reply text, no IP, no key.
+
+```json
+{"event":"chat.model","outcome":"aborted","engine":"claude-haiku-5-5","deltas":14,"outputTokens":null,"ms":1180}
+```
+
+To measure: ask for a long answer on the live URL, press Stop after about a second, then filter the
+Vercel function logs for `chat.model`.
+
+| Log line | Meaning |
+| --- | --- |
+| `outcome: "aborted"`, small `deltas`, `ms` near the moment Stop was pressed | Vercel forwarded the disconnect. The provider call was cancelled. |
+| `outcome: "done"`, full-length `deltas` and `outputTokens` | The function never learned the client left. Stop saved the reader's time, not the tokens. |
 
 ## 7 · How to run and verify
 
@@ -235,22 +271,26 @@ values are treated as "no key".
 | --- | --- |
 | `npm run typecheck` | 0 errors |
 | `npm run lint` | 0 warnings |
-| `npm test` | 308 passed in 12 files (248 before FE-06; 60 new) |
+| `npm test` | 324 passed in 14 files (248 before FE-06; 76 new) |
 | `npm run build` | `/api/chat` and `/underwriting` are dynamic (`ƒ`) |
 | `npm run test:e2e` | 44 checks passed: the 18 existing fold and overflow checks, plus 13 Copilot checks at each of 375px and 1280px |
 
 New tests:
 [`StreamingUnderwritingChat.test.tsx`](../src/features/ai-copilot/__tests__/StreamingUnderwritingChat.test.tsx)
 (11, component),
-[`chatCore.test.ts`](../src/features/ai-copilot/__tests__/chatCore.test.ts) (18: reducer, SSE parser,
-Markdown parser) and [`chatRoute.test.ts`](../src/lib/ai/__tests__/chatRoute.test.ts) (31: route,
-engine resolution, system prompt, local engine).
+[`chatCore.test.ts`](../src/features/ai-copilot/__tests__/chatCore.test.ts) (20: reducer, SSE parser,
+Markdown parser, fetch transport), [`chatRoute.test.ts`](../src/lib/ai/__tests__/chatRoute.test.ts)
+(33: route, rate limit, log line, engine resolution, system prompt, local engine),
+[`rateLimit.test.ts`](../src/lib/ai/__tests__/rateLimit.test.ts) (9) and
+[`env.test.ts`](../src/utils/env.test.ts) (3).
 
 **Mutation checks.** Each of these one-line changes was applied, the suite was run, and at least one
 test failed: always auto-scroll; threshold 48 → 60 and 48 → 30; pin decided by the scroll-event flag;
 Stop without `abort()`; reducer accepting late events; Stop discarding the partial text; thinking
 indicator outside the body container; no `localStorage` write; local generator ignoring the abort
-signal; `abortSignal` not passed to `streamText`; history truncated to the last message.
+signal; `abortSignal` not passed to `streamText`; history truncated to the last message; route skipping
+the limiter; limiter applied to the local engine; rejected requests counted; fixed window instead of
+sliding; no daily rule; no key eviction; an abort logged as `done`; a placeholder accepted as a key.
 
 ## 8 · Screenshots
 

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { MockLanguageModelV4, simulateReadableStream } from 'ai/test'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '../../../app/api/chat/route.ts'
 import {
   createSseParser,
@@ -11,6 +11,7 @@ import { APPLICANT_PROFILES } from '../../../features/scoring/applicants.ts'
 import { scoreApplicant } from '../../../features/scoring/scoreEngine.ts'
 import { LEGAL_TRANSITIONS } from '../../../features/disbursement/loanStateMachine.ts'
 import { buildLocalReply, detectTopic, streamLocalReply, tokenize } from '../local-engine.ts'
+import { chatRateLimiter } from '../rate-limit.ts'
 import {
   LOCAL_ENGINE_LABEL,
   STARTER_PROMPTS,
@@ -35,16 +36,27 @@ vi.mock('../underwriting-model.ts', async (importOriginal) => {
   }
 })
 
+/** Every `chat.model` log line the route wrote during the test, parsed. */
+let modelLogs: Record<string, unknown>[] = []
+
+beforeEach(() => {
+  modelLogs = []
+  vi.spyOn(console, 'info').mockImplementation((line: unknown) => {
+    if (typeof line === 'string') modelLogs.push(JSON.parse(line) as Record<string, unknown>)
+  })
+})
+
 afterEach(() => {
   injected.engine = null
+  chatRateLimiter.reset()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
 
-function chatRequest(body: unknown, signal?: AbortSignal): Request {
+function chatRequest(body: unknown, signal?: AbortSignal, ip?: string): Request {
   return new Request('http://localhost/api/chat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(ip === undefined ? {} : { 'x-real-ip': ip }) },
     body: typeof body === 'string' ? body : JSON.stringify(body),
     ...(signal === undefined ? {} : { signal }),
   })
@@ -186,6 +198,12 @@ describe('POST /api/chat — hosted model through the AI SDK streamText', () => 
     expect(prompt).toContain('Underwriting & Ledger Risk Copilot')
     expect(call?.prompt.map((message) => message.role)).toEqual(['system', 'user', 'assistant', 'user'])
     expect(prompt).toContain('What is her score?')
+
+    // One log line: counts and timing only, nothing the user or the model wrote.
+    expect(modelLogs).toHaveLength(1)
+    expect(modelLogs[0]).toMatchObject({ event: 'chat.model', outcome: 'done', engine: 'mock-model', deltas: 2, outputTokens: 5 })
+    expect(Object.keys(modelLogs[0] ?? {}).sort()).toEqual(['deltas', 'engine', 'event', 'ms', 'outcome', 'outputTokens'])
+    expect(JSON.stringify(modelLogs)).not.toContain('score')
   })
 
   it('reports a non-stop finish reason so the UI can flag a cut-off reply', async () => {
@@ -229,6 +247,7 @@ describe('POST /api/chat — hosted model through the AI SDK streamText', () => 
     expect(logged).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(logged.mock.calls)).not.toContain('REJECTED')
     expect(JSON.stringify(logged.mock.calls)).not.toContain('x-api-key')
+    expect(modelLogs).toEqual([expect.objectContaining({ outcome: 'fallback', deltas: 0, outputTokens: null })])
   })
 
   it('keeps the partial text and sends an error frame when the model fails mid-stream', async () => {
@@ -247,6 +266,67 @@ describe('POST /api/chat — hosted model through the AI SDK streamText', () => 
     expect(joinTokens(events)).toBe('Half an ')
     expect(events.at(-1)?.type).toBe('error')
     expect(events.some((event) => event.type === 'done')).toBe(false)
+    expect(modelLogs).toEqual([expect.objectContaining({ outcome: 'error', deltas: 1 })])
+  })
+})
+
+describe('POST /api/chat — rate limit on the hosted model', () => {
+  const okModel = (): MockLanguageModelV4 =>
+    new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: simulateReadableStream<StreamPart>({
+          chunks: [
+            { type: 'stream-start', warnings: [] },
+            { type: 'text-start', id: 't1' },
+            { type: 'text-delta', id: 't1', delta: 'ok' },
+            { type: 'text-end', id: 't1' },
+            { type: 'finish', finishReason: { unified: 'stop', raw: 'end_turn' }, usage: USAGE },
+          ],
+          initialDelayInMs: null,
+          chunkDelayInMs: null,
+        }),
+      }),
+    })
+
+  it('answers 10 requests from one client, then returns 429 without calling the model', async () => {
+    const model = okModel()
+    injected.engine = { kind: 'anthropic', label: 'mock-model', model }
+
+    for (let request = 1; request <= 10; request += 1) {
+      const response = await POST(chatRequest(ask('Explain the ledger.'), undefined, '203.0.113.7'))
+      expect(response.status).toBe(200)
+      await response.text()
+    }
+
+    const limited = await POST(chatRequest(ask('Explain the ledger.'), undefined, '203.0.113.7'))
+    expect(limited.status).toBe(429)
+    expect(limited.headers.get('content-type')).toContain('application/json')
+    const retryAfter = Number(limited.headers.get('retry-after'))
+    expect(retryAfter).toBeGreaterThan(0)
+    expect(retryAfter).toBeLessThanOrEqual(60)
+    expect(await limited.json()).toEqual({ error: expect.stringMatching(/^Too many requests from this network\. Try again in \d+ seconds?\.$/) })
+
+    // The 11th request never reached the provider: nothing was billed for it.
+    expect(model.doStreamCalls).toHaveLength(10)
+    expect(modelLogs).toHaveLength(10)
+
+    // Another client is unaffected.
+    const other = await POST(chatRequest(ask('Explain the ledger.'), undefined, '198.51.100.9'))
+    expect(other.status).toBe(200)
+    await other.text()
+    expect(model.doStreamCalls).toHaveLength(11)
+  })
+
+  it('does not limit the local rule engine, which costs nothing', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '')
+    vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY', '')
+    for (let request = 1; request <= 12; request += 1) {
+      const response = await POST(chatRequest(ask('Write me a poem about the sea.'), undefined, '203.0.113.7'))
+      expect(response.status).toBe(200)
+      await response.text()
+    }
+    // And it writes no model log line: there was no model call.
+    expect(modelLogs).toHaveLength(0)
   })
 })
 
@@ -289,6 +369,7 @@ describe('cancellation reaches the engine, not just the response', () => {
     }
 
     expect(model.doStreamCalls[0]?.abortSignal?.aborted).toBe(true)
+    expect(modelLogs).toEqual([expect.objectContaining({ outcome: 'aborted', deltas: 1, outputTokens: null })])
     expect(joinTokens(events)).toBe('Streaming ')
     expect(events.some((event) => event.type === 'done' || event.type === 'error')).toBe(false)
   })

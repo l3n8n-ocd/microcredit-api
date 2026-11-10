@@ -29,6 +29,7 @@ import type { StarterPrompt } from '../../features/ai-copilot/chatTypes.ts'
 import { LEGAL_TRANSITIONS } from '../../features/disbursement/loanStateMachine.ts'
 import { APPLICANT_PROFILES } from '../../features/scoring/applicants.ts'
 import { INTEREST_RATE_BPS, formatBps, recommendLimit, scoreApplicant } from '../../features/scoring/scoreEngine.ts'
+import { readSecret } from '../../utils/env.ts'
 import { formatPHP } from '../../utils/money.ts'
 import { lifecycleEdges } from './local-engine.ts'
 
@@ -204,8 +205,7 @@ export const LOCAL_ENGINE_LABEL = 'local rule engine (no API key set)'
  * engine, not a 401 from the provider on every message.
  */
 function readKey(name: 'ANTHROPIC_API_KEY' | 'GOOGLE_GENERATIVE_AI_API_KEY'): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value === '' || value.includes('placeholder') ? null : value
+  return readSecret(process.env[name])
 }
 
 function readModelOverride(name: 'ANTHROPIC_MODEL' | 'GOOGLE_GENERATIVE_AI_MODEL', fallback: string): string {

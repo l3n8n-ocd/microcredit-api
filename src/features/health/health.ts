@@ -1,3 +1,4 @@
+import { readSecret } from '../../utils/env.ts'
 import { toCentavos } from '../../utils/money.ts'
 // Import the pure modules directly, not the feature barrels: the barrels also
 // re-export 'use client' components, which must not enter a server graph.
@@ -53,8 +54,10 @@ export function getHealthReport(): HealthReport {
     env: {
       NEXT_PUBLIC_APP_ENV: Boolean(process.env.NEXT_PUBLIC_APP_ENV),
       NEXT_PUBLIC_APP_URL: Boolean(process.env.NEXT_PUBLIC_APP_URL),
-      ANTHROPIC_API_KEY: Boolean(process.env.ANTHROPIC_API_KEY),
-      WEBHOOK_HMAC_SECRET: Boolean(process.env.WEBHOOK_HMAC_SECRET),
+      // Secrets: true only for a real value. A `.env.example` placeholder reads as false.
+      ANTHROPIC_API_KEY: readSecret(process.env.ANTHROPIC_API_KEY) !== null,
+      GOOGLE_GENERATIVE_AI_API_KEY: readSecret(process.env.GOOGLE_GENERATIVE_AI_API_KEY) !== null,
+      WEBHOOK_HMAC_SECRET: readSecret(process.env.WEBHOOK_HMAC_SECRET) !== null,
     },
   }
 }

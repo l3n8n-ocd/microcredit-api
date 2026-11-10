@@ -49,7 +49,7 @@ act on.
 | Loan state machine | ✅ Built and tested: all 10 states below as one discriminated union in [`loanStateMachine.ts`](./src/features/disbursement/loanStateMachine.ts); 100 `(state, event)` pairs tested, 88 illegal ones rejected as a typed `409` |
 | Double-entry ledger | ✅ Built and tested: disbursement, repayment (principal + interest) and compensating-reversal entries in [`ledger.ts`](./src/features/disbursement/ledger.ts), each checked for `Σ debits === Σ credits`; in-memory mock API |
 | Credit scoring | ✅ Built and tested: 3-signal trust score (0–1000) with reason codes and a limit in `Centavos`, in [`src/features/scoring/`](./src/features/scoring/); demo profiles only, no real borrower data |
-| AI Underwriting & Ledger Risk Copilot (FE-06) | ✅ Built and tested: streaming chat on [`/underwriting#copilot`](https://microcredit-api-beta.vercel.app/underwriting#copilot) over `POST /api/chat`, with Stop, smart auto-scroll and `localStorage` history. With no API key set it answers from a local rule engine (labelled as such), not a language model; a hosted model on the live URL is a TODO ([`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) §1) |
+| AI Underwriting & Ledger Risk Copilot (FE-06) | ✅ Built and tested: streaming chat on [`/underwriting#copilot`](https://microcredit-api-beta.vercel.app/underwriting#copilot) over `POST /api/chat`, with Stop, smart auto-scroll and `localStorage` history. Hosted-model requests pass an in-memory rate limit (10 a minute, 100 a day per client). With no real API key active it answers from a local rule engine (labelled as such), not a language model; a hosted model on the live URL is a TODO ([`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) §1) |
 | Deployed demo | ✅ [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app) (Vercel, imported from `main`; mock API, no real wallet payouts) |
 
 ## Loan Lifecycle State Machine
@@ -151,7 +151,7 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (308 tests)                |
+| `npm test`          | Run the Vitest suite once (324 tests)                |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -288,9 +288,12 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **Model config:** [`src/lib/ai/underwriting-model.ts`](./src/lib/ai/underwriting-model.ts) — `server-only`; system prompt
     generated from `scoreApplicant` and `transitionLoan`, guardrails (integer `Centavos`, 10 states,
     no invented borrowers), 4 starter prompts.
-  - **Evidence:** 60 new Vitest tests (308 total) and 13 Chromium checks per width against the real
+  - **Rate limit:** [`src/lib/ai/rate-limit.ts`](./src/lib/ai/rate-limit.ts) — in-memory sliding window, 10 a minute and
+    100 a day per client, `429` + `Retry-After`, applied only when a paid model would be called.
+  - **Evidence:** 76 new Vitest tests (324 total) and 13 Chromium checks per width against the real
     route. The browser run caught a scroll race that jsdom missed. **Not yet shown:** a hosted model
-    answering on the live URL (no key is set), and rate limiting.
+    answering on the live URL (no real key is active there), and a limit that holds across server
+    instances (the limiter is per instance; the provider spend cap is the guarantee).
 
 ## License
 
