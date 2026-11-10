@@ -49,6 +49,7 @@ act on.
 | Loan state machine | ✅ Built and tested: all 10 states below as one discriminated union in [`loanStateMachine.ts`](./src/features/disbursement/loanStateMachine.ts); 100 `(state, event)` pairs tested, 88 illegal ones rejected as a typed `409` |
 | Double-entry ledger | ✅ Built and tested: disbursement, repayment (principal + interest) and compensating-reversal entries in [`ledger.ts`](./src/features/disbursement/ledger.ts), each checked for `Σ debits === Σ credits`; in-memory mock API |
 | Credit scoring | ✅ Built and tested: 3-signal trust score (0–1000) with reason codes and a limit in `Centavos`, in [`src/features/scoring/`](./src/features/scoring/); demo profiles only, no real borrower data |
+| AI Underwriting & Ledger Risk Copilot (FE-06) | ✅ Built and tested: streaming chat on [`/underwriting#copilot`](https://microcredit-api-beta.vercel.app/underwriting#copilot) over `POST /api/chat`, with Stop, smart auto-scroll and `localStorage` history. With no API key set it answers from a local rule engine (labelled as such), not a language model; a hosted model on the live URL is a TODO ([`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) §1) |
 | Deployed demo | ✅ [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app) (Vercel, imported from `main`; mock API, no real wallet payouts) |
 
 ## Loan Lifecycle State Machine
@@ -150,8 +151,8 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (248 tests)                |
-| `npm run test:e2e`  | After `build`: above-the-fold on `/` + all 5 routes at 375px/1280px with no overflow (Playwright) |
+| `npm test`          | Run the Vitest suite once (308 tests)                |
+| `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
 Conventional Commits (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`).
@@ -244,8 +245,8 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **Honest gather list:** what is ready now vs. still needed, each with a build-week fallback.
 - **FE-04 / FE-05 · Capstone Skeleton, Deployed (Week 3 Frontend AI Engineering):** [`SPEC.md`](./SPEC.md)
   - **Migrated to Next.js 16 (App Router)** — Server Components by default, `'use client'` only on the
-    interactive Disbursement & Underwriting islands; all 248 Vitest tests and the above-the-fold
-    Playwright check still pass.
+    interactive Disbursement & Underwriting islands; the 248 Vitest tests it had at the time and the
+    above-the-fold Playwright check still passed.
   - **5 routed screens:** [`/`](https://microcredit-api-beta.vercel.app/) (idempotent disburse sandbox),
     `/underwriting`, `/ledger`, `/advisories`, and `/health` (async Server Component + `/api/health`).
   - **Identity Kit design tokens** in `src/app/globals.css`, fonts self-hosted via `next/font/local`.
@@ -276,6 +277,20 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **Working MCP server** (JSON-RPC 2.0 over stdio): 3 tools, 2 resources, 1 prompt, grounded in this repo.
   - **3 real tool calls** chat alone can't do — local file audit, live `/api/health` telemetry, and a
     cross-file redaction+CVSS audit that writes an artifact to disk — with screenshots in `docs/assets/curated/`.
+- **FE-06 · Streaming AI Chat Interface (Week 4 Frontend AI Engineering):** [`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) · live at [`/underwriting#copilot`](https://microcredit-api-beta.vercel.app/underwriting#copilot)
+  - **Route handler:** [`src/app/api/chat/route.ts`](./src/app/api/chat/route.ts) — SSE over `POST /api/chat`; the AI SDK's
+    `streamText` when a server-only key is set, a local rule engine (one token every ~22 ms) otherwise;
+    `req.signal` cancels either.
+  - **Chat component:** [`src/features/ai-copilot/StreamingUnderwritingChat.tsx`](./src/features/ai-copilot/StreamingUnderwritingChat.tsx) —
+    Stop as a 5-state reducer with one `AbortController` per request, auto-scroll pinned only within
+    48 px of the bottom, thinking → first token in one DOM node, and a Markdown renderer that never shows
+    an unclosed fence or a dangling `**`.
+  - **Model config:** [`src/lib/ai/underwriting-model.ts`](./src/lib/ai/underwriting-model.ts) — `server-only`; system prompt
+    generated from `scoreApplicant` and `transitionLoan`, guardrails (integer `Centavos`, 10 states,
+    no invented borrowers), 4 starter prompts.
+  - **Evidence:** 60 new Vitest tests (308 total) and 13 Chromium checks per width against the real
+    route. The browser run caught a scroll race that jsdom missed. **Not yet shown:** a hosted model
+    answering on the live URL (no key is set), and rate limiting.
 
 ## License
 

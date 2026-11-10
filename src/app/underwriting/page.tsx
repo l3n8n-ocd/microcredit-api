@@ -1,9 +1,23 @@
 import { SEED_LOANS } from '../../features/disbursement/seedLoans.ts'
 import { APPLICANT_PROFILES } from '../../features/scoring/applicants.ts'
 import { scoreApplicant } from '../../features/scoring/scoreEngine.ts'
+import { StreamingUnderwritingChat } from '../../features/ai-copilot/StreamingUnderwritingChat.tsx'
 import { UnderwritingStandalone } from '../../features/scoring/UnderwritingStandalone.tsx'
+import { STARTER_PROMPTS, describeEngine } from '../../lib/ai/underwriting-model.ts'
 
-/** `/underwriting` — Server Component header + metrics, then the interactive workbench island. */
+/**
+ * The engine label depends on which API key is set, and Vercel env vars can
+ * change between deploys, so the page is rendered per request, not at build time.
+ */
+export const dynamic = 'force-dynamic'
+
+/**
+ * `/underwriting` — Server Component header + metrics, then two client islands:
+ * the AI Copilot chat (FE-06) and the scoring workbench.
+ *
+ * The starter prompts and the engine label come from the server-only model
+ * module and cross to the client as plain props. The API key never does.
+ */
 export default function UnderwritingPage() {
   const scores = APPLICANT_PROFILES.map((profile) => scoreApplicant(profile.signals).score)
   const avg = scores.length === 0 ? 0 : Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
@@ -33,19 +47,14 @@ export default function UnderwritingPage() {
         ))}
       </dl>
 
+      <div className="mt-8">
+        <StreamingUnderwritingChat starterPrompts={STARTER_PROMPTS} engine={describeEngine()} />
+      </div>
+
       <section className="mt-8 rounded-lg border border-slate-800 bg-slate-950 p-4 text-slate-100">
         <UnderwritingStandalone />
       </section>
 
-      <aside className="mt-8 rounded-lg border border-dashed border-main/40 bg-white p-6">
-        <h2 className="text-lg font-semibold">AI Underwriting Copilot — planned (FE-06 / FE-07)</h2>
-        <p className="mt-2 text-sm text-slate-600">
-          A server route will stream an explainable rationale for each trust score and suggest reason
-          codes, using a tool-use call to the scoring engine. Keys stay server-side
-          (<code className="font-mono">ANTHROPIC_API_KEY</code>, see <code className="font-mono">.env.example</code>).
-          Not built yet.
-        </p>
-      </aside>
     </main>
   )
 }

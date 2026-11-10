@@ -90,7 +90,10 @@ Rules that follow from the table:
   - no parallax or scroll-jacking;
   - no stock imagery;
   - motion is at most a 150 ms colour or opacity transition, and is off under
-    `prefers-reduced-motion`.
+    `prefers-reduced-motion`;
+  - one functional exception (FE-06): the AI Copilot's "thinking" dots loop while a request is in
+    flight, because "waiting for the first token" is a state the user must see. They are static under
+    `prefers-reduced-motion`, where the "Thinking…" text carries the meaning.
 - **Same skeleton for every case:** Problem → What I Did & Decided → What Came of It, as in
   [`FRAME_IT_AS_CASES.md` §3](./FRAME_IT_AS_CASES.md#3--the-framed-case-studies). The reader learns the
   layout once.

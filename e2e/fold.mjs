@@ -5,6 +5,10 @@
  *    "Simulate double-click / network retry" buttons are fully above the fold,
  *    and Simulate produces exactly one 201 Created + one 201 Idempotent replay.
  * 2. All 5 SPEC.md routes load at 375px and 1280px with zero horizontal overflow.
+ * 3. The AI Copilot on `/underwriting` (FE-06), at 375px and 1280px, against the
+ *    real `/api/chat` route: tokens arrive one by one, Stop aborts the request
+ *    and keeps the partial reply, a follow-up sends straight away, scrolling up
+ *    releases auto-scroll, and the conversation survives a reload.
  *
  * Fonts: the app self-hosts Plus Jakarta Sans / JetBrains Mono, but a low-end
  * Android phone paints the fallback first, and the fallback is TALLER. This check
@@ -85,6 +89,98 @@ try {
       process.stdout.write(`${ok ? '✓' : '✗'} ${width}px ${route}: HTTP ${status}, horizontal overflow ${overflow}px\n`)
       if (!ok) failures.push(`${width}px ${route}: status ${status}, overflow ${overflow}px`)
     }
+    await page.close()
+  }
+
+  // 3. AI Copilot: real streaming, Stop recovery, smart auto-scroll, persistence.
+  for (const width of [375, 1280]) {
+    // A short viewport, so the reply outgrows the log while it is still streaming.
+    const page = await browser.newPage({ viewport: { width, height: 620 } })
+    const check = (ok, label) => {
+      process.stdout.write(`${ok ? '✓' : '✗'} ${width}px copilot: ${label}\n`)
+      if (!ok) failures.push(`${width}px copilot: ${label}`)
+    }
+    const aborted = []
+    page.on('requestfailed', (request) => {
+      if (request.url().endsWith('/api/chat')) aborted.push(request.failure()?.errorText ?? '')
+    })
+
+    await page.goto(`${BASE}/underwriting`, { waitUntil: 'networkidle' })
+    const chat = page.locator('#copilot')
+    const log = chat.getByRole('log')
+    const lastBody = chat.getByTestId('assistant-body').last()
+    const bodyLength = async () => (await lastBody.innerText()).length
+
+    // 3a. Thinking shows inside the bubble, then tokens arrive one by one.
+    await chat.getByRole('button', { name: 'Walk the 10 loan states' }).click()
+    await chat.getByTestId('thinking-indicator').waitFor()
+    check(await lastBody.getByTestId('thinking-indicator').isVisible(), 'thinking indicator is inside the assistant bubble')
+    await chat.getByTestId('thinking-indicator').waitFor({ state: 'detached' })
+    const lengths = new Set()
+    for (let sample = 0; sample < 12; sample += 1) {
+      lengths.add(await bodyLength())
+      await page.waitForTimeout(60)
+    }
+    check(lengths.size >= 5, `text grew token by token (${lengths.size} distinct lengths in 12 samples)`)
+
+    // 3b. Scroll up mid-stream: the pin is released, the pill appears, the view stays put.
+    await page.waitForFunction(() => {
+      const element = document.querySelector('#copilot [role="log"]')
+      return element !== null && element.scrollHeight - element.clientHeight > 150
+    })
+    const followed = await log.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight)
+    check(followed <= 48, `auto-scroll follows the stream while pinned (${Math.round(followed)}px from the bottom)`)
+    await log.evaluate((element) => {
+      element.scrollTop = 0
+    })
+    const pill = chat.getByRole('button', { name: /Jump to latest \(streaming/ })
+    await pill.waitFor()
+    await page.waitForTimeout(200)
+    check((await log.evaluate((element) => element.scrollTop)) === 0, 'scrolling up releases auto-scroll while tokens keep arriving')
+    await pill.click()
+    const distance = await log.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight)
+    check(distance <= 48, `"Jump to latest" returns to the bottom (${Math.round(distance)}px away)`)
+
+    // 3c. Stop: request aborted, partial reply kept and flagged, text stops growing.
+    await chat.getByRole('button', { name: 'Stop' }).click()
+    await chat.getByText('[Stopped mid-stream]').waitFor()
+    const stoppedAt = await bodyLength()
+    await page.waitForTimeout(400)
+    check(stoppedAt > 0 && (await bodyLength()) === stoppedAt, `Stop keeps the partial reply and no token lands after it (${stoppedAt} chars)`)
+    check(aborted.length === 1, `Stop aborted the /api/chat request (${aborted.join(', ') || 'no aborted request seen'})`)
+
+    // 3d. Stop, then send again: the composer is usable at once and the next reply completes.
+    const input = chat.getByLabel('Ask the copilot')
+    check(await input.isEditable(), 'input is editable right after Stop')
+    await input.fill('Can a REJECTED loan be DISBURSED?')
+    await input.press('Enter')
+    await chat.getByRole('button', { name: 'Stop' }).waitFor()
+    await chat.getByRole('button', { name: 'Send' }).waitFor({ timeout: 20_000 })
+    const reply = await lastBody.innerText()
+    check(reply.startsWith('No.') && reply.includes('409 ILLEGAL_TRANSITION'), 'follow-up after Stop streams to completion')
+
+    // 3e. Multi-turn context: a follow-up with no topic keyword is answered in context.
+    await input.fill('and for Liza?')
+    await input.press('Enter')
+    await chat.getByRole('button', { name: 'Send' }).waitFor({ timeout: 20_000, state: 'attached' })
+    await chat.getByText('Reply complete.').waitFor({ state: 'attached', timeout: 20_000 })
+    check((await lastBody.innerText()).includes("Liza's Bigasan"), 'follow-up "and for Liza?" resolves from earlier turns')
+
+    // 3f. A code block (the journal) must not widen the page on a phone.
+    await input.fill('Show the journal entry for a ₱12,500.00 GCash disbursement.')
+    await input.press('Enter')
+    await chat.getByText('Reply complete.').waitFor({ state: 'detached' })
+    await chat.getByText('Reply complete.').waitFor({ state: 'attached', timeout: 20_000 })
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+    check((await lastBody.innerText()).includes('1250000') && overflow <= 0, `journal code block renders with ${overflow}px horizontal overflow`)
+
+    // 3g. Reload: the conversation comes back from localStorage. Clear removes it.
+    await page.reload({ waitUntil: 'networkidle' })
+    const restored = await chat.locator('[data-role]').count()
+    check(restored === 8, `conversation restored after reload (${restored} of 8 messages)`)
+    await chat.getByRole('button', { name: 'Clear conversation' }).click()
+    const stored = await page.evaluate(() => window.localStorage.getItem('microcredit_ai_copilot_v1'))
+    check((await chat.locator('[data-role]').count()) === 0 && stored === null, 'Clear conversation empties the chat and the storage key')
     await page.close()
   }
 } finally {

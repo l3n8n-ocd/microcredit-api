@@ -31,6 +31,16 @@ export function Navbar() {
           <span className="text-sm">MicroCredit API</span>
         </Link>
         <ul className="flex items-center gap-1 text-sm">
+          {/* Quick launch for the FE-06 chat. An in-page anchor, so it is never the "current page". */}
+          <li>
+            <Link
+              href="/underwriting#copilot"
+              className="flex items-center gap-1.5 rounded-full border border-main px-2.5 py-0.5 font-semibold text-ink transition-colors hover:bg-slate-100"
+            >
+              <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
+              AI Copilot
+            </Link>
+          </li>
           {NAV_LINKS.map((link) => {
             const active = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href)
             return (

@@ -80,9 +80,9 @@ lint-staged + commitlint (git hooks), GitHub Actions (CI). Capstone spec: [`SPEC
 | `npm run dev`       | Start the Next.js dev server (App Router)                  |
 | `npm run typecheck` | Strict-mode type check (`tsc --noEmit`)                    |
 | `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports except Next route files)|
-| `npm test`          | Run Vitest once (248 tests in `src/features/`)             |
+| `npm test`          | Run Vitest once (308 tests in `src/`)                      |
 | `npm run build`     | Production build (`next build`)                            |
-| `npm run test:e2e`  | After `build`: above-the-fold on `/` + all 5 routes responsive at 375px/1280px (Playwright, `next start`) |
+| `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes responsive at 375px/1280px, and the AI Copilot streaming / Stop / scroll checks (Playwright, `next start`) |
 
 **Before saying any change is done, run `typecheck`, `lint`, and `test`, and
 report the results.** CI runs the same four steps on every push and pull request.
@@ -444,7 +444,9 @@ upstages it.
    `--font-sans` / `--font-mono` in `src/app/globals.css`. No third family.
 4. **No decorative clutter.** No gradients, `animate-*`, parallax, stock photos, abstract AI art or
    illustrations in the hero. Motion is at most a 150 ms transition and respects
-   `prefers-reduced-motion`.
+   `prefers-reduced-motion`. *One exception:* the AI Copilot's "thinking" dots (`.copilot-dot` in
+   `src/app/globals.css`) loop while a request is in flight. They report a state, they are not
+   decoration, and they are static under `prefers-reduced-motion`. No second looping animation.
 5. **A new token, font or hue needs a reason in the design system doc first**, in the same commit.
 
 *Check:* this prints nothing.
