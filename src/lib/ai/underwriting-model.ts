@@ -45,10 +45,14 @@ export const MODEL_CONFIG = {
   anthropicModel: 'claude-opus-5-5',
   /**
    * Default Google model, used only when `GOOGLE_GENERATIVE_AI_API_KEY` is set
-   * and no Anthropic key is. Taken from the model ID union shipped in the
-   * installed `@ai-sdk/google`; override with `GOOGLE_GENERATIVE_AI_MODEL`.
+   * and no Anthropic key is. This is Google's moving alias for the current
+   * Flash model, not a pinned version: the first default here was the pinned
+   * `gemini-2.5-flash`, which Google had already retired (the live call
+   * returned HTTP 404). An alias keeps the demo answering across retirements;
+   * the cost is that the model behind it can change without a deploy. Pin a
+   * version with `GOOGLE_GENERATIVE_AI_MODEL` when that matters.
    */
-  googleModel: 'gemini-2.5-flash',
+  googleModel: 'gemini-flash-latest',
   /**
    * Ceiling on one reply, thinking included. This is the main cost bound on a
    * public route. A reply that hits it ends with `finishReason: "length"`,

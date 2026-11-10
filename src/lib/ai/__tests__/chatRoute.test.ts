@@ -466,7 +466,7 @@ describe('resolveChatEngine — keys are read server-side from env', () => {
 
     vi.stubEnv('ANTHROPIC_API_KEY', '')
     vi.stubEnv('GOOGLE_GENERATIVE_AI_MODEL', '')
-    expect(resolveChatEngine()).toMatchObject({ kind: 'google', label: 'gemini-2.5-flash' })
+    expect(resolveChatEngine()).toMatchObject({ kind: 'google', label: 'gemini-flash-latest' })
   })
 })
 
