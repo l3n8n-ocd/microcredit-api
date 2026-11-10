@@ -25,14 +25,22 @@ import {
 vi.mock('server-only', () => ({}))
 
 /** The engine the route will use. `null` means "resolve from env like production does". */
-const injected = vi.hoisted(() => ({ engine: null as unknown }))
+const injected = vi.hoisted(() => ({ engine: null as unknown, timeout: null as null | { firstChunkMs: number; chunkMs: number; totalMs: number } }))
 
 vi.mock('../underwriting-model.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../underwriting-model.ts')>()
   return {
     ...actual,
     // Same engine, without 22 ms between tokens: a full reply streams in milliseconds.
-    MODEL_CONFIG: { ...actual.MODEL_CONFIG, localTokenDelayMs: 2, localFirstTokenDelayMs: 0 },
+    MODEL_CONFIG: {
+      ...actual.MODEL_CONFIG,
+      localTokenDelayMs: 2,
+      localFirstTokenDelayMs: 0,
+      // Production timeouts unless a test asks for short ones.
+      get modelTimeout() {
+        return injected.timeout ?? actual.MODEL_CONFIG.modelTimeout
+      },
+    },
     resolveChatEngine: () => (injected.engine as ChatEngine | null) ?? actual.resolveChatEngine(),
   }
 })
@@ -49,6 +57,7 @@ beforeEach(() => {
 
 afterEach(() => {
   injected.engine = null
+  injected.timeout = null
   chatRateLimiter.reset()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
@@ -301,6 +310,74 @@ describe('POST /api/chat — hosted model through the AI SDK streamText', () => 
     expect(events.at(-1)?.type).toBe('error')
     expect(events.some((event) => event.type === 'done')).toBe(false)
     expect(modelLogs).toEqual([expect.objectContaining({ outcome: 'error', deltas: 1 })])
+  })
+})
+
+describe('POST /api/chat — a hosted model that goes quiet', () => {
+  it('abandons a model that never sends a chunk and answers from the local engine', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    injected.timeout = { firstChunkMs: 80, chunkMs: 80, totalMs: 2_000 }
+    injected.engine = {
+      kind: 'google',
+      label: 'mock-model',
+      // Accepts the request and then never writes anything: what the live Gemini call did.
+      model: new MockLanguageModelV4({ doStream: async () => ({ stream: new ReadableStream<StreamPart>({}) }) }),
+    }
+
+    const startedAt = Date.now()
+    const events = await readEvents(await POST(chatRequest(ask('Can a REJECTED loan be DISBURSED?'))))
+    expect(Date.now() - startedAt).toBeLessThan(5_000)
+    expect(events.filter((event) => event.type === 'meta').at(-1)).toEqual({
+      type: 'meta',
+      engine: { kind: 'local', label: 'local rule engine (model call timed out)' },
+    })
+    expect(joinTokens(events)).toMatch(/^No\./)
+    expect(events.at(-1)).toEqual({ type: 'done', finishReason: 'stop' })
+    expect(modelLogs).toEqual([expect.objectContaining({ outcome: 'fallback', deltas: 0 })])
+  })
+
+  it('treats a reply that finishes with no text as a failure, not as an empty bubble', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    injected.engine = {
+      kind: 'google',
+      label: 'mock-model',
+      model: mockModel([
+        { type: 'stream-start', warnings: [] },
+        { type: 'finish', finishReason: { unified: 'stop', raw: 'STOP' }, usage: USAGE },
+      ]),
+    }
+    const events = await readEvents(await POST(chatRequest(ask('Can a REJECTED loan be DISBURSED?'))))
+    expect(events.filter((event) => event.type === 'meta').at(-1)).toEqual({
+      type: 'meta',
+      engine: { kind: 'local', label: 'local rule engine (model returned no text)' },
+    })
+    expect(joinTokens(events)).toMatch(/^No\./)
+  })
+
+  it('does not retry a rate-limited call: one attempt, then the fallback with HTTP 429', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const model = new MockLanguageModelV4({
+      doStream: async () => {
+        throw new APICallError({
+          message: 'quota exceeded',
+          url: 'https://provider.example/v1beta/models/mock-model:streamGenerateContent',
+          requestBodyValues: {},
+          statusCode: 429,
+          responseHeaders: { 'retry-after': '55' },
+          isRetryable: true,
+        })
+      },
+    })
+    injected.engine = { kind: 'google', label: 'mock-model', model }
+
+    const startedAt = Date.now()
+    const events = await readEvents(await POST(chatRequest(ask('Can a REJECTED loan be DISBURSED?'))))
+    expect(Date.now() - startedAt).toBeLessThan(5_000)
+    expect(model.doStreamCalls).toHaveLength(1)
+    expect(events.filter((event) => event.type === 'meta').at(-1)).toEqual({
+      type: 'meta',
+      engine: { kind: 'local', label: 'local rule engine (model call failed: HTTP 429)' },
+    })
   })
 })
 

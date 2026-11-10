@@ -59,6 +59,13 @@ export const MODEL_CONFIG = {
    * which the UI shows instead of pretending the answer was complete.
    */
   maxOutputTokens: 4096,
+  /**
+   * How long a hosted model may stay silent before the request is abandoned and
+   * the local engine answers instead. Without this, a provider that holds the
+   * connection open (or tells the SDK to retry later) hangs the chat until the
+   * host kills the function at 60 s. `totalMs` stays under that ceiling.
+   */
+  modelTimeout: { firstChunkMs: 25_000, chunkMs: 25_000, totalMs: 55_000 },
   /** Local rule engine pacing: one token every ~22 ms reads like model output. */
   localTokenDelayMs: 22,
   /** Local rule engine: pause before the first token, so "thinking" is a visible state. */

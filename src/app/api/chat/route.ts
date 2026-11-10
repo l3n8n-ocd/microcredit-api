@@ -91,6 +91,16 @@ function logModelRequest(entry: {
   console.info(JSON.stringify({ event: 'chat.model', ...entry }))
 }
 
+/** The model went silent past `MODEL_CONFIG.modelTimeout`, or finished without writing anything. */
+class ModelSilentError extends Error {
+  readonly reason: 'model call timed out' | 'model returned no text'
+  constructor(reason: 'model call timed out' | 'model returned no text') {
+    super(reason)
+    this.name = 'ModelSilentError'
+    this.reason = reason
+  }
+}
+
 /**
  * The HTTP status a provider answered with, or null when there was no HTTP
  * answer (DNS, timeout, a non-HTTP error). The status is the one part of a
@@ -125,7 +135,11 @@ async function streamFromModel(
     maxOutputTokens: MODEL_CONFIG.maxOutputTokens,
     // Stop → fetch abort → this signal → the provider request is cancelled, so no more tokens are billed.
     abortSignal: signal,
-    maxRetries: 1,
+    // Fail fast. The SDK's retry waits as long as the provider's `Retry-After`
+    // says (up to a minute), which is longer than a person waits on a chat. One
+    // failed attempt falls back to the local engine straight away instead.
+    maxRetries: 0,
+    timeout: MODEL_CONFIG.modelTimeout,
     // Errors are handled below from the stream's `error` part. Without this the SDK also dumps them to the console.
     onError: () => {},
     // FE-07: `tools: { score_applicant, check_transition }` and `stopWhen` go here.
@@ -142,9 +156,15 @@ async function streamFromModel(
       outputTokens = part.totalUsage.outputTokens ?? null
     } else if (part.type === 'error') {
       throw part.error
+    } else if (part.type === 'abort' && !signal.aborted) {
+      // Aborted, but not by the client: the SDK's own timeout fired.
+      throw new ModelSilentError('model call timed out')
     }
   }
-  if (!signal.aborted) send({ type: 'done', finishReason })
+  if (signal.aborted) return outputTokens
+  // A "successful" reply with no text would leave an empty bubble. Treat it as a failure.
+  if (sent.count === 0) throw new ModelSilentError('model returned no text')
+  send({ type: 'done', finishReason })
   return outputTokens
 }
 
@@ -234,7 +254,14 @@ export async function POST(req: Request): Promise<Response> {
           // The label carries the status, so "wrong key" and "wrong model ID" can be
           // told apart from the browser without access to the server logs.
           log('fallback', null, status)
-          const reason = status === null ? 'model call failed' : `model call failed: HTTP ${status}`
+          const reason =
+            error instanceof ModelSilentError
+              ? error.reason
+              : error instanceof Error && error.name === 'TimeoutError'
+                ? 'model call timed out'
+                : status === null
+                  ? 'model call failed'
+                  : `model call failed: HTTP ${status}`
           send({ type: 'meta', engine: { kind: 'local', label: `local rule engine (${reason})` } })
           await streamFromLocalEngine(messages, abort.signal, send)
         }
