@@ -23,7 +23,7 @@
  *
  * What the model says is configured in src/lib/ai/underwriting-model.ts.
  */
-import { streamText } from 'ai'
+import { APICallError, RetryError, streamText } from 'ai'
 import {
   encodeSseFrame,
   parseChatRequest,
@@ -85,8 +85,24 @@ function logModelRequest(entry: {
   readonly deltas: number
   readonly outputTokens: number | null
   readonly ms: number
+  /** HTTP status the provider answered with, when the request failed. */
+  readonly status: number | null
 }): void {
   console.info(JSON.stringify({ event: 'chat.model', ...entry }))
+}
+
+/**
+ * The HTTP status a provider answered with, or null when there was no HTTP
+ * answer (DNS, timeout, a non-HTTP error). The status is the one part of a
+ * provider error that is safe to show: 401/403 = key rejected, 404 = model ID
+ * not found, 429 = quota. The provider's message is never read, because it can
+ * echo request details.
+ */
+function providerStatus(error: unknown): number | null {
+  if (APICallError.isInstance(error)) return error.statusCode ?? null
+  // Retries exhausted: the SDK wraps the last failure.
+  if (RetryError.isInstance(error)) return providerStatus(error.lastError)
+  return null
 }
 
 /**
@@ -182,8 +198,15 @@ export async function POST(req: Request): Promise<Response> {
 
         const sent = { count: 0 }
         const startedAt = Date.now()
-        const log = (outcome: ModelOutcome, outputTokens: number | null): void =>
-          logModelRequest({ outcome, engine: engine.label, deltas: sent.count, outputTokens, ms: Date.now() - startedAt })
+        const log = (outcome: ModelOutcome, outputTokens: number | null, status: number | null = null): void =>
+          logModelRequest({
+            outcome,
+            engine: engine.label,
+            deltas: sent.count,
+            outputTokens,
+            ms: Date.now() - startedAt,
+            status,
+          })
 
         try {
           const outputTokens = await streamFromModel(engine, messages, abort.signal, send, sent)
@@ -193,17 +216,26 @@ export async function POST(req: Request): Promise<Response> {
             log('aborted', null)
             return
           }
-          // Log the error class only. Never the prompt, the reply or the key (CLAUDE.md §8).
-          console.error('[api/chat] model stream failed:', error instanceof Error ? error.name : 'unknown error')
+          // Log the error class and HTTP status only. Never the prompt, the reply, the
+          // provider's message or the key (CLAUDE.md §8).
+          const status = providerStatus(error)
+          console.error(
+            '[api/chat] model stream failed:',
+            error instanceof Error ? error.name : 'unknown error',
+            status === null ? 'no HTTP status' : `HTTP ${status}`,
+          )
           if (sent.count > 0) {
-            log('error', null)
+            log('error', null, status)
             send({ type: 'error', message: 'The model stopped responding part-way through. The partial reply is kept.' })
             return
           }
           // Nothing reached the user yet (bad key, rate limit, provider outage):
           // answer from the local engine and say so, instead of showing a dead chat.
-          log('fallback', null)
-          send({ type: 'meta', engine: { kind: 'local', label: 'local rule engine (model call failed)' } })
+          // The label carries the status, so "wrong key" and "wrong model ID" can be
+          // told apart from the browser without access to the server logs.
+          log('fallback', null, status)
+          const reason = status === null ? 'model call failed' : `model call failed: HTTP ${status}`
+          send({ type: 'meta', engine: { kind: 'local', label: `local rule engine (${reason})` } })
           await streamFromLocalEngine(messages, abort.signal, send)
         }
       } catch {

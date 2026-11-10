@@ -151,7 +151,7 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (324 tests)                |
+| `npm test`          | Run the Vitest suite once (325 tests)                |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -290,7 +290,7 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
     no invented borrowers), 4 starter prompts.
   - **Rate limit:** [`src/lib/ai/rate-limit.ts`](./src/lib/ai/rate-limit.ts) — in-memory sliding window, 10 a minute and
     100 a day per client, `429` + `Retry-After`, applied only when a paid model would be called.
-  - **Evidence:** 76 new Vitest tests (324 total) and 13 Chromium checks per width against the real
+  - **Evidence:** 77 new Vitest tests (325 total) and 13 Chromium checks per width against the real
     route. The browser run caught a scroll race that jsdom missed. **Not yet shown:** a hosted model
     answering on the live URL (no real key is active there), and a limit that holds across server
     instances (the limiter is per instance; the provider spend cap is the guarantee).

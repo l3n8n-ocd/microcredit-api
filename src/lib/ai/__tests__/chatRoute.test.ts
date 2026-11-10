@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { APICallError } from 'ai'
 import { MockLanguageModelV4, simulateReadableStream } from 'ai/test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { POST } from '../../../app/api/chat/route.ts'
@@ -202,7 +203,7 @@ describe('POST /api/chat — hosted model through the AI SDK streamText', () => 
     // One log line: counts and timing only, nothing the user or the model wrote.
     expect(modelLogs).toHaveLength(1)
     expect(modelLogs[0]).toMatchObject({ event: 'chat.model', outcome: 'done', engine: 'mock-model', deltas: 2, outputTokens: 5 })
-    expect(Object.keys(modelLogs[0] ?? {}).sort()).toEqual(['deltas', 'engine', 'event', 'ms', 'outcome', 'outputTokens'])
+    expect(Object.keys(modelLogs[0] ?? {}).sort()).toEqual(['deltas', 'engine', 'event', 'ms', 'outcome', 'outputTokens', 'status'])
     expect(JSON.stringify(modelLogs)).not.toContain('score')
   })
 
@@ -247,7 +248,40 @@ describe('POST /api/chat — hosted model through the AI SDK streamText', () => 
     expect(logged).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(logged.mock.calls)).not.toContain('REJECTED')
     expect(JSON.stringify(logged.mock.calls)).not.toContain('x-api-key')
-    expect(modelLogs).toEqual([expect.objectContaining({ outcome: 'fallback', deltas: 0, outputTokens: null })])
+    expect(modelLogs).toEqual([expect.objectContaining({ outcome: 'fallback', deltas: 0, outputTokens: null, status: null })])
+  })
+
+  it('puts the provider HTTP status, and nothing else from the error, in the fallback label and the log', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    injected.engine = {
+      kind: 'google',
+      label: 'mock-model',
+      model: new MockLanguageModelV4({
+        doStream: async () => {
+          throw new APICallError({
+            message: 'models/mock-model is not found for API version v1beta. requestId=secret-looking-detail',
+            url: 'https://provider.example/v1beta/models/mock-model:streamGenerateContent',
+            requestBodyValues: { contents: 'the user prompt' },
+            statusCode: 404,
+            isRetryable: false,
+          })
+        },
+      }),
+    }
+
+    const events = await readEvents(await POST(chatRequest(ask('Can a REJECTED loan be DISBURSED?'))))
+    expect(events.filter((event) => event.type === 'meta').at(-1)).toEqual({
+      type: 'meta',
+      engine: { kind: 'local', label: 'local rule engine (model call failed: HTTP 404)' },
+    })
+    expect(joinTokens(events)).toMatch(/^No\./)
+    expect(modelLogs).toEqual([expect.objectContaining({ outcome: 'fallback', status: 404 })])
+
+    const everythingLogged = JSON.stringify([logged.mock.calls, modelLogs, events])
+    expect(everythingLogged).toContain('HTTP 404')
+    expect(everythingLogged).not.toContain('secret-looking-detail')
+    expect(everythingLogged).not.toContain('provider.example')
+    expect(everythingLogged).not.toContain('the user prompt')
   })
 
   it('keeps the partial text and sends an error frame when the model fails mid-stream', async () => {
