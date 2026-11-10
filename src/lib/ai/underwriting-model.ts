@@ -74,6 +74,13 @@ export const MODEL_CONFIG = {
    * host kills the function at 60 s. `totalMs` stays under that ceiling.
    */
   modelTimeout: { firstChunkMs: 25_000, chunkMs: 25_000, totalMs: 55_000 },
+  /**
+   * How long to wait for the provider's FIRST sign of life. The SDK timeouts
+   * above only start counting once a response has begun, so a provider that
+   * accepts the connection and then says nothing would hold the chat for the
+   * full 55 s. After this long with no output, the local engine answers.
+   */
+  modelFirstResponseMs: 20_000,
   /** Local rule engine pacing: one token every ~22 ms reads like model output. */
   localTokenDelayMs: 22,
   /** Local rule engine: pause before the first token, so "thinking" is a visible state. */

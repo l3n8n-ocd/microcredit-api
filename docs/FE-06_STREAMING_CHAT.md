@@ -271,7 +271,7 @@ values are treated as "no key".
 | --- | --- |
 | `npm run typecheck` | 0 errors |
 | `npm run lint` | 0 warnings |
-| `npm test` | 330 passed in 14 files (248 before FE-06; 82 new) |
+| `npm test` | 333 passed in 15 files (248 before FE-06; 85 new) |
 | `npm run build` | `/api/chat` and `/underwriting` are dynamic (`ƒ`) |
 | `npm run test:e2e` | 44 checks passed: the 18 existing fold and overflow checks, plus 13 Copilot checks at each of 375px and 1280px |
 

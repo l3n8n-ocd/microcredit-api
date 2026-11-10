@@ -99,7 +99,12 @@ interface StreamProgress {
   deltas: number
   /** Count of every stream part by type. */
   readonly parts: Record<string, number>
+  /** Set when the provider produced nothing within `modelFirstResponseMs`. */
+  stalled: boolean
 }
+
+/** Stream part families that only a provider response can produce (the SDK emits `start` etc. itself). */
+const PROVIDER_OUTPUT = /^(text|reasoning|tool|source|file|finish|error)/
 
 /** Says what the model was doing when it ran out of time, from the parts it did send. */
 function describeTimeout(progress: StreamProgress): string {
@@ -107,7 +112,7 @@ function describeTimeout(progress: StreamProgress): string {
   if (types.some((type) => type.startsWith('reasoning'))) return 'model call timed out while thinking'
   // Only these part families carry model output. The SDK also emits bookkeeping
   // parts of its own (`start`, `start-step`, `abort`), which prove nothing arrived.
-  const producedOutput = types.some((type) => /^(text|tool|source|file)/.test(type))
+  const producedOutput = types.some((type) => PROVIDER_OUTPUT.test(type))
   return producedOutput ? 'model call timed out: no text' : 'model call timed out: no response'
 }
 
@@ -149,13 +154,42 @@ async function streamFromModel(
   send: Send,
   progress: StreamProgress,
 ): Promise<number | null> {
+  // Watchdog for the provider's first sign of life. It has its own controller,
+  // so "the provider stalled" and "the client pressed Stop" stay distinguishable.
+  const watchdog = new AbortController()
+  const firstResponseTimer = setTimeout(() => {
+    progress.stalled = true
+    watchdog.abort()
+  }, MODEL_CONFIG.modelFirstResponseMs)
+
+  try {
+    const callSignal = AbortSignal.any([signal, watchdog.signal])
+    return await relayModelStream(engine, messages, signal, callSignal, send, progress, () => clearTimeout(firstResponseTimer))
+  } finally {
+    clearTimeout(firstResponseTimer)
+  }
+}
+
+/**
+ * `signal` is the client's (Stop, tab closed). `callSignal` is what the provider
+ * request listens to: the client's signal or the watchdog, whichever fires first.
+ */
+async function relayModelStream(
+  engine: HostedEngine,
+  messages: readonly WireMessage[],
+  signal: AbortSignal,
+  callSignal: AbortSignal,
+  send: Send,
+  progress: StreamProgress,
+  onFirstResponse: () => void,
+): Promise<number | null> {
   const result = streamText({
     model: engine.model,
     instructions: buildSystemPrompt(),
     messages: messages.map((message) => ({ role: message.role, content: message.content })),
     maxOutputTokens: MODEL_CONFIG.maxOutputTokens,
     // Stop → fetch abort → this signal → the provider request is cancelled, so no more tokens are billed.
-    abortSignal: signal,
+    abortSignal: callSignal,
     // Fail fast. The SDK's retry waits as long as the provider's `Retry-After`
     // says (up to a minute), which is longer than a person waits on a chat. One
     // failed attempt falls back to the local engine straight away instead.
@@ -171,6 +205,7 @@ async function streamFromModel(
   let outputTokens: number | null = null
   for await (const part of result.stream) {
     progress.parts[part.type] = (progress.parts[part.type] ?? 0) + 1
+    if (PROVIDER_OUTPUT.test(part.type)) onFirstResponse()
     if (part.type === 'text-delta') {
       progress.deltas += 1
       send({ type: 'token', text: part.text })
@@ -239,7 +274,7 @@ export async function POST(req: Request): Promise<Response> {
           return
         }
 
-        const progress: StreamProgress = { deltas: 0, parts: {} }
+        const progress: StreamProgress = { deltas: 0, parts: {}, stalled: false }
         const startedAt = Date.now()
         const log = (outcome: ModelOutcome, outputTokens: number | null, status: number | null = null): void =>
           logModelRequest({
@@ -279,6 +314,7 @@ export async function POST(req: Request): Promise<Response> {
           // told apart from the browser without access to the server logs.
           log('fallback', null, status)
           const timedOut =
+            progress.stalled ||
             (error instanceof ModelSilentError && error.reason === 'model call timed out') ||
             (error instanceof Error && error.name === 'TimeoutError')
           const reason = timedOut
