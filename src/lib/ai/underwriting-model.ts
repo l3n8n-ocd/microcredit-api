@@ -60,6 +60,14 @@ export const MODEL_CONFIG = {
    */
   maxOutputTokens: 4096,
   /**
+   * Reasoning effort for the Google engine. Gemini's current Flash models think
+   * before they answer, and at the provider default the live call was still
+   * producing no answer text after 55 s. A chat that explains a state machine in
+   * 250 words needs a short think, not a long one. The Anthropic engine keeps
+   * its provider default.
+   */
+  googleReasoning: 'low',
+  /**
    * How long a hosted model may stay silent before the request is abandoned and
    * the local engine answers instead. Without this, a provider that holds the
    * connection open (or tells the SDK to retry later) hangs the chat until the
@@ -205,7 +213,13 @@ Every successful transition returns a new loan with version + 1.
 
 /** A hosted model reached through the AI SDK, or the local rule engine. */
 export type ChatEngine =
-  | { readonly kind: 'anthropic' | 'google'; readonly label: string; readonly model: LanguageModel }
+  | {
+      readonly kind: 'anthropic' | 'google'
+      readonly label: string
+      readonly model: LanguageModel
+      /** Passed to `streamText` as its provider-neutral `reasoning` option. */
+      readonly reasoning: 'provider-default' | 'low'
+    }
   | { readonly kind: 'local'; readonly label: string }
 
 export const LOCAL_ENGINE_LABEL = 'local rule engine (no API key set)'
@@ -233,13 +247,23 @@ export function resolveChatEngine(): ChatEngine {
   const anthropicKey = readKey('ANTHROPIC_API_KEY')
   if (anthropicKey !== null) {
     const modelId = readModelOverride('ANTHROPIC_MODEL', MODEL_CONFIG.anthropicModel)
-    return { kind: 'anthropic', label: modelId, model: createAnthropic({ apiKey: anthropicKey })(modelId) }
+    return {
+      kind: 'anthropic',
+      label: modelId,
+      model: createAnthropic({ apiKey: anthropicKey })(modelId),
+      reasoning: 'provider-default',
+    }
   }
 
   const googleKey = readKey('GOOGLE_GENERATIVE_AI_API_KEY')
   if (googleKey !== null) {
     const modelId = readModelOverride('GOOGLE_GENERATIVE_AI_MODEL', MODEL_CONFIG.googleModel)
-    return { kind: 'google', label: modelId, model: createGoogle({ apiKey: googleKey })(modelId) }
+    return {
+      kind: 'google',
+      label: modelId,
+      model: createGoogle({ apiKey: googleKey })(modelId),
+      reasoning: MODEL_CONFIG.googleReasoning,
+    }
   }
 
   return { kind: 'local', label: LOCAL_ENGINE_LABEL }

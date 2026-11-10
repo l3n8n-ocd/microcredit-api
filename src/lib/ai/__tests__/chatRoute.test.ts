@@ -212,7 +212,7 @@ describe('POST /api/chat — hosted model through the AI SDK streamText', () => 
     // One log line: counts and timing only, nothing the user or the model wrote.
     expect(modelLogs).toHaveLength(1)
     expect(modelLogs[0]).toMatchObject({ event: 'chat.model', outcome: 'done', engine: 'mock-model', deltas: 2, outputTokens: 5 })
-    expect(Object.keys(modelLogs[0] ?? {}).sort()).toEqual(['deltas', 'engine', 'event', 'ms', 'outcome', 'outputTokens', 'status'])
+    expect(Object.keys(modelLogs[0] ?? {}).sort()).toEqual(['deltas', 'engine', 'event', 'ms', 'outcome', 'outputTokens', 'parts', 'status'])
     expect(JSON.stringify(modelLogs)).not.toContain('score')
   })
 
@@ -329,11 +329,61 @@ describe('POST /api/chat — a hosted model that goes quiet', () => {
     expect(Date.now() - startedAt).toBeLessThan(5_000)
     expect(events.filter((event) => event.type === 'meta').at(-1)).toEqual({
       type: 'meta',
-      engine: { kind: 'local', label: 'local rule engine (model call timed out)' },
+      engine: { kind: 'local', label: 'local rule engine (model call timed out: no response)' },
     })
     expect(joinTokens(events)).toMatch(/^No\./)
     expect(events.at(-1)).toEqual({ type: 'done', finishReason: 'stop' })
     expect(modelLogs).toEqual([expect.objectContaining({ outcome: 'fallback', deltas: 0 })])
+  })
+
+  it('says so when the time ran out while the model was still thinking', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    injected.timeout = { firstChunkMs: 5_000, chunkMs: 5_000, totalMs: 300 }
+    let timer: ReturnType<typeof setInterval> | undefined
+    injected.engine = {
+      kind: 'google',
+      label: 'mock-model',
+      reasoning: 'low',
+      // Streams reasoning forever and never reaches the answer.
+      model: new MockLanguageModelV4({
+        doStream: async () => ({
+          stream: new ReadableStream<StreamPart>({
+            start(controller) {
+              controller.enqueue({ type: 'stream-start', warnings: [] })
+              controller.enqueue({ type: 'reasoning-start', id: 'r1' })
+              timer = setInterval(() => controller.enqueue({ type: 'reasoning-delta', id: 'r1', delta: 'hmm ' }), 20)
+            },
+            cancel() {
+              clearInterval(timer)
+            },
+          }),
+        }),
+      }),
+    }
+
+    const events = await readEvents(await POST(chatRequest(ask('Can a REJECTED loan be DISBURSED?'))))
+    clearInterval(timer)
+    expect(events.filter((event) => event.type === 'meta').at(-1)).toEqual({
+      type: 'meta',
+      engine: { kind: 'local', label: 'local rule engine (model call timed out while thinking)' },
+    })
+    // Reasoning text is never relayed or logged: only the count of parts by type.
+    expect(joinTokens(events)).toMatch(/^No\./)
+    expect(JSON.stringify([events, modelLogs])).not.toContain('hmm')
+    expect(modelLogs[0]?.parts).toMatchObject({ 'reasoning-delta': expect.any(Number) })
+  })
+
+  it('passes the engine reasoning effort to the model call', async () => {
+    const model = mockModel([
+      { type: 'stream-start', warnings: [] },
+      { type: 'text-start', id: 't1' },
+      { type: 'text-delta', id: 't1', delta: 'ok' },
+      { type: 'text-end', id: 't1' },
+      { type: 'finish', finishReason: { unified: 'stop', raw: 'STOP' }, usage: USAGE },
+    ])
+    injected.engine = { kind: 'google', label: 'mock-model', model, reasoning: 'low' }
+    await (await POST(chatRequest(ask('Explain the ledger.')))).text()
+    expect(model.doStreamCalls[0]?.reasoning).toBe('low')
   })
 
   it('treats a reply that finishes with no text as a failure, not as an empty bubble', async () => {
@@ -536,14 +586,14 @@ describe('resolveChatEngine — keys are read server-side from env', () => {
     vi.stubEnv('ANTHROPIC_API_KEY', 'unit-test-value-not-a-key')
     vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY', 'unit-test-value-not-a-key')
     vi.stubEnv('ANTHROPIC_MODEL', '')
-    expect(resolveChatEngine()).toMatchObject({ kind: 'anthropic', label: 'claude-opus-5-5' })
+    expect(resolveChatEngine()).toMatchObject({ kind: 'anthropic', label: 'claude-opus-5-5', reasoning: 'provider-default' })
 
     vi.stubEnv('ANTHROPIC_MODEL', 'claude-haiku-5-5')
     expect(resolveChatEngine()).toMatchObject({ kind: 'anthropic', label: 'claude-haiku-5-5' })
 
     vi.stubEnv('ANTHROPIC_API_KEY', '')
     vi.stubEnv('GOOGLE_GENERATIVE_AI_MODEL', '')
-    expect(resolveChatEngine()).toMatchObject({ kind: 'google', label: 'gemini-flash-latest' })
+    expect(resolveChatEngine()).toMatchObject({ kind: 'google', label: 'gemini-flash-latest', reasoning: 'low' })
   })
 })
 

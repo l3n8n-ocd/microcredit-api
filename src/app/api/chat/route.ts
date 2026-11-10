@@ -82,6 +82,8 @@ type ModelOutcome = 'done' | 'aborted' | 'error' | 'fallback'
 function logModelRequest(entry: {
   readonly outcome: ModelOutcome
   readonly engine: string
+  /** How many stream parts of each type arrived, e.g. `{"reasoning-delta":40,"text-delta":0}`. Type names only. */
+  readonly parts: Readonly<Record<string, number>>
   readonly deltas: number
   readonly outputTokens: number | null
   readonly ms: number
@@ -89,6 +91,24 @@ function logModelRequest(entry: {
   readonly status: number | null
 }): void {
   console.info(JSON.stringify({ event: 'chat.model', ...entry }))
+}
+
+/** What a hosted model has produced so far in one request. */
+interface StreamProgress {
+  /** Text deltas relayed to the client. */
+  deltas: number
+  /** Count of every stream part by type. */
+  readonly parts: Record<string, number>
+}
+
+/** Says what the model was doing when it ran out of time, from the parts it did send. */
+function describeTimeout(progress: StreamProgress): string {
+  const types = Object.keys(progress.parts)
+  if (types.some((type) => type.startsWith('reasoning'))) return 'model call timed out while thinking'
+  // Only these part families carry model output. The SDK also emits bookkeeping
+  // parts of its own (`start`, `start-step`, `abort`), which prove nothing arrived.
+  const producedOutput = types.some((type) => /^(text|tool|source|file)/.test(type))
+  return producedOutput ? 'model call timed out: no text' : 'model call timed out: no response'
 }
 
 /** The model went silent past `MODEL_CONFIG.modelTimeout`, or finished without writing anything. */
@@ -117,16 +137,17 @@ function providerStatus(error: unknown): number | null {
 
 /**
  * Streams a hosted model and returns the output token count the provider
- * reported (null if it reported none). `sent.count` is updated as deltas go
- * out, so the caller can tell "failed before the first token" (safe to fall
- * back) from "failed halfway" (must report an error) even when this throws.
+ * reported (null if it reported none). `progress` is updated as parts arrive,
+ * so the caller can tell "failed before the first token" (safe to fall back)
+ * from "failed halfway" (must report an error) even when this throws, and can
+ * say what the model was doing when it timed out.
  */
 async function streamFromModel(
   engine: HostedEngine,
   messages: readonly WireMessage[],
   signal: AbortSignal,
   send: Send,
-  sent: { count: number },
+  progress: StreamProgress,
 ): Promise<number | null> {
   const result = streamText({
     model: engine.model,
@@ -140,6 +161,7 @@ async function streamFromModel(
     // failed attempt falls back to the local engine straight away instead.
     maxRetries: 0,
     timeout: MODEL_CONFIG.modelTimeout,
+    reasoning: engine.reasoning,
     // Errors are handled below from the stream's `error` part. Without this the SDK also dumps them to the console.
     onError: () => {},
     // FE-07: `tools: { score_applicant, check_transition }` and `stopWhen` go here.
@@ -148,8 +170,9 @@ async function streamFromModel(
   let finishReason = 'stop'
   let outputTokens: number | null = null
   for await (const part of result.stream) {
+    progress.parts[part.type] = (progress.parts[part.type] ?? 0) + 1
     if (part.type === 'text-delta') {
-      sent.count += 1
+      progress.deltas += 1
       send({ type: 'token', text: part.text })
     } else if (part.type === 'finish') {
       finishReason = part.finishReason
@@ -163,7 +186,7 @@ async function streamFromModel(
   }
   if (signal.aborted) return outputTokens
   // A "successful" reply with no text would leave an empty bubble. Treat it as a failure.
-  if (sent.count === 0) throw new ModelSilentError('model returned no text')
+  if (progress.deltas === 0) throw new ModelSilentError('model returned no text')
   send({ type: 'done', finishReason })
   return outputTokens
 }
@@ -216,20 +239,21 @@ export async function POST(req: Request): Promise<Response> {
           return
         }
 
-        const sent = { count: 0 }
+        const progress: StreamProgress = { deltas: 0, parts: {} }
         const startedAt = Date.now()
         const log = (outcome: ModelOutcome, outputTokens: number | null, status: number | null = null): void =>
           logModelRequest({
             outcome,
             engine: engine.label,
-            deltas: sent.count,
+            parts: progress.parts,
+            deltas: progress.deltas,
             outputTokens,
             ms: Date.now() - startedAt,
             status,
           })
 
         try {
-          const outputTokens = await streamFromModel(engine, messages, abort.signal, send, sent)
+          const outputTokens = await streamFromModel(engine, messages, abort.signal, send, progress)
           log(abort.signal.aborted ? 'aborted' : 'done', outputTokens)
         } catch (error) {
           if (abort.signal.aborted) {
@@ -244,7 +268,7 @@ export async function POST(req: Request): Promise<Response> {
             error instanceof Error ? error.name : 'unknown error',
             status === null ? 'no HTTP status' : `HTTP ${status}`,
           )
-          if (sent.count > 0) {
+          if (progress.deltas > 0) {
             log('error', null, status)
             send({ type: 'error', message: 'The model stopped responding part-way through. The partial reply is kept.' })
             return
@@ -254,14 +278,16 @@ export async function POST(req: Request): Promise<Response> {
           // The label carries the status, so "wrong key" and "wrong model ID" can be
           // told apart from the browser without access to the server logs.
           log('fallback', null, status)
-          const reason =
-            error instanceof ModelSilentError
+          const timedOut =
+            (error instanceof ModelSilentError && error.reason === 'model call timed out') ||
+            (error instanceof Error && error.name === 'TimeoutError')
+          const reason = timedOut
+            ? describeTimeout(progress)
+            : error instanceof ModelSilentError
               ? error.reason
-              : error instanceof Error && error.name === 'TimeoutError'
-                ? 'model call timed out'
-                : status === null
-                  ? 'model call failed'
-                  : `model call failed: HTTP ${status}`
+              : status === null
+                ? 'model call failed'
+                : `model call failed: HTTP ${status}`
           send({ type: 'meta', engine: { kind: 'local', label: `local rule engine (${reason})` } })
           await streamFromLocalEngine(messages, abort.signal, send)
         }

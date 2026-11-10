@@ -80,7 +80,7 @@ lint-staged + commitlint (git hooks), GitHub Actions (CI). Capstone spec: [`SPEC
 | `npm run dev`       | Start the Next.js dev server (App Router)                  |
 | `npm run typecheck` | Strict-mode type check (`tsc --noEmit`)                    |
 | `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports except Next route files)|
-| `npm test`          | Run Vitest once (328 tests in `src/`)                      |
+| `npm test`          | Run Vitest once (330 tests in `src/`)                      |
 | `npm run build`     | Production build (`next build`)                            |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes responsive at 375px/1280px, and the AI Copilot streaming / Stop / scroll checks (Playwright, `next start`) |
 
