@@ -64,10 +64,10 @@ Server Components by default; `'use client'` only on interactive leaves.
 | Streaming-safe Markdown | [`StreamingMarkdown.tsx`](./src/features/ai-copilot/StreamingMarkdown.tsx) + [`streamingMarkdownParser.ts`](./src/features/ai-copilot/streamingMarkdownParser.ts) |
 | State machine, wire protocol, transport, persistence | [`chatReducer.ts`](./src/features/ai-copilot/chatReducer.ts), [`chatProtocol.ts`](./src/features/ai-copilot/chatProtocol.ts), [`chatTransport.ts`](./src/features/ai-copilot/chatTransport.ts), [`conversationStore.ts`](./src/features/ai-copilot/conversationStore.ts) |
 
-**Not yet shown:** a hosted model answering on the live URL (no real key is active there), and a rate
-limit that holds across server instances: the limiter is in-memory, so it slows abuse but the spend cap
-on the provider account is the guarantee. With no key the reply comes from the local rule engine and is
-labelled as such.
+**Not yet shown:** a hosted model answering on the live URL (a Google key is active, but
+`gemini-flash-latest` has not returned a reply, so `/api/chat` falls back to the local rule engine and
+labels it), and a rate limit that holds under a live burst: the limiter is in-memory, and 13
+simultaneous requests all passed. It needs a shared store before a paid key.
 
 Each AI route is server-only and keys never reach the client. The local engine computes every number
 from the domain functions; the hosted-model path is constrained by a system prompt generated from the

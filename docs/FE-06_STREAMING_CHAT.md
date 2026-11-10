@@ -26,9 +26,9 @@ Read this first. It is the honest scope of the deliverable (`CLAUDE.md` §9.2 ru
 | "Stop, then send again" works for any number of turns | Component test loops stop → send 5 times; e2e sends a follow-up right after Stop | ✅ Verified |
 | Multi-turn context is sent and used | Component test asserts the full history on request 2; e2e: "and for Liza?" resolves to Liza's score | ✅ Verified |
 | The hosted-model path calls the AI SDK's `streamText` | Route test drives the real `streamText` with the SDK's `MockLanguageModelV4` | ✅ Verified against a mock |
-| A real Claude or Gemini model answers on the live URL | The live engine label still reads `local rule engine (no API key set)`. `ANTHROPIC_API_KEY` exists on Vercel but its value is not a usable key (empty or the `.env.example` placeholder) | ⏳ **TODO:** set the real key, redeploy, confirm `/api/health` shows `ANTHROPIC_API_KEY: true` and the label shows a model ID |
+| A real Claude or Gemini model answers on the live URL | A Google key is active (`/api/health`: `GOOGLE_GENERATIVE_AI_API_KEY: true`) and Google accepts it: a retired model ID returned `404`, and a burst returned Google's own `429`. But no reply text has come back yet. `gemini-flash-latest` sent no response within 20 s on every attempt, so each reply fell back to the local engine, labelled `model call timed out: no response` | ⏳ **TODO:** set `GOOGLE_GENERATIVE_AI_MODEL` to a model ID that answers for this key in AI Studio, redeploy, confirm a reply labelled with the model |
 | Server-side cancellation on Vercel stops the model call | Unit test proves the abort signal reaches the model call. Each hosted request now writes one `chat.model` log line with its outcome (§6), but no hosted request has run on Vercel yet | ⏳ **TODO:** press Stop on the live URL, read the log line |
-| Rate limiting on `/api/chat` | In-memory sliding window, 10 a minute and 100 a day per client; route test: 10 replies, then `429` and the model is not called | ✅ Built, per server instance only (§6) |
+| Rate limiting on `/api/chat` | In-memory sliding window, 10 a minute and 100 a day per client; route test: 10 replies, then `429` and the model is not called. **On the live URL it did not hold:** 13 simultaneous requests all returned `200` (either several server instances, or several egress IPs on the test machine; not determined) | ⚠️ Built and unit-tested; not effective under a live burst (§6) |
 
 **With no key set, the reply does not come from a language model.** It comes from a local rule engine,
 [`src/lib/ai/local-engine.ts`](../src/lib/ai/local-engine.ts), and the UI says so under every reply:
@@ -236,9 +236,39 @@ in its own workspace with a low monthly limit. For a public demo, also set
 
 ### Checking the key took effect
 
-`GET /api/health` reports `ANTHROPIC_API_KEY: true` only for a real value. An empty value or a
-`.env.example` placeholder reads `false`, and the chat stays on the local engine
-([`src/utils/env.ts`](../src/utils/env.ts)). Env changes on Vercel apply to new deployments only.
+`GET /api/health` reports `ANTHROPIC_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` as `true` only for a
+real value. An empty value or a `.env.example` placeholder reads `false`, and the chat stays on the local
+engine ([`src/utils/env.ts`](../src/utils/env.ts)). Env changes on Vercel apply to new deployments only.
+
+### When the provider misbehaves
+
+The chat never dead-ends. If the model has sent no text yet, the route answers from the local engine and
+the label under the reply says why. Only the HTTP status and part-type counts are read from a failure;
+the provider's message is never logged or shown.
+
+| What happened | After | Label under the reply |
+| --- | --- | --- |
+| Provider returned an error status (bad key, unknown model, quota) | At once; `maxRetries: 0` | `local rule engine (model call failed: HTTP 404)` |
+| Provider accepted the request and sent nothing | 20 s (`modelFirstResponseMs`, own `AbortController`) | `local rule engine (model call timed out: no response)` |
+| Response started, then no chunk | 25 s (`firstChunkMs` / `chunkMs`) | `… (model call timed out while thinking)` or `… (model call timed out: no text)` |
+| Reply finished with no text | At once | `local rule engine (model returned no text)` |
+| Failure after text was already shown | At once | The partial reply stays; the chat shows an error |
+
+Each of these was hit on the live URL or reproduced in a test.
+[`googleProvider.test.ts`](../src/lib/ai/__tests__/googleProvider.test.ts) runs the real
+`@ai-sdk/google` provider through the route against a local server that speaks Gemini's SSE format,
+including the case where the server accepts the request and never answers.
+
+Production runs Node 22 (`"engines": { "node": "22.x" }`), the same major version as CI and `.nvmrc`.
+With `">=22"` Vercel had picked Node 26, which no check in this repo ran on.
+
+### What the live burst showed about the limiter
+
+Thirteen requests sent at the same moment all returned `200`. An in-memory limiter is only as wide as
+one server instance and one client key, and under a real burst at least one of those did not hold. With
+a free-tier key the cost exposure is zero: the provider quota is the cap, and when it runs out the chat
+falls back to the local engine (`HTTP 429` in the label). **Before a paid key goes on this URL, the
+limiter needs a shared store.**
 
 ### Measuring server-side cancellation
 
@@ -281,8 +311,9 @@ New tests:
 [`chatCore.test.ts`](../src/features/ai-copilot/__tests__/chatCore.test.ts) (20: reducer, SSE parser,
 Markdown parser, fetch transport), [`chatRoute.test.ts`](../src/lib/ai/__tests__/chatRoute.test.ts)
 (39: route, rate limit, log line, timeouts, engine resolution, system prompt, local engine),
-[`rateLimit.test.ts`](../src/lib/ai/__tests__/rateLimit.test.ts) (9) and
-[`env.test.ts`](../src/utils/env.test.ts) (3).
+[`rateLimit.test.ts`](../src/lib/ai/__tests__/rateLimit.test.ts) (9),
+[`googleProvider.test.ts`](../src/lib/ai/__tests__/googleProvider.test.ts) (3: the real Google provider
+over HTTP) and [`env.test.ts`](../src/utils/env.test.ts) (3).
 
 **Mutation checks.** Each of these one-line changes was applied, the suite was run, and at least one
 test failed: always auto-scroll; threshold 48 → 60 and 48 → 30; pin decided by the scroll-event flag;

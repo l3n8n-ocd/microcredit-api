@@ -49,7 +49,7 @@ act on.
 | Loan state machine | ✅ Built and tested: all 10 states below as one discriminated union in [`loanStateMachine.ts`](./src/features/disbursement/loanStateMachine.ts); 100 `(state, event)` pairs tested, 88 illegal ones rejected as a typed `409` |
 | Double-entry ledger | ✅ Built and tested: disbursement, repayment (principal + interest) and compensating-reversal entries in [`ledger.ts`](./src/features/disbursement/ledger.ts), each checked for `Σ debits === Σ credits`; in-memory mock API |
 | Credit scoring | ✅ Built and tested: 3-signal trust score (0–1000) with reason codes and a limit in `Centavos`, in [`src/features/scoring/`](./src/features/scoring/); demo profiles only, no real borrower data |
-| AI Underwriting & Ledger Risk Copilot (FE-06) | ✅ Built and tested: streaming chat on [`/underwriting#copilot`](https://microcredit-api-beta.vercel.app/underwriting#copilot) over `POST /api/chat`, with Stop, smart auto-scroll and `localStorage` history. Hosted-model requests pass an in-memory rate limit (10 a minute, 100 a day per client). With no real API key active it answers from a local rule engine (labelled as such), not a language model; a hosted model on the live URL is a TODO ([`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) §1) |
+| AI Underwriting & Ledger Risk Copilot (FE-06) | ✅ Built and tested: streaming chat on [`/underwriting#copilot`](https://microcredit-api-beta.vercel.app/underwriting#copilot) over `POST /api/chat`, with Stop, smart auto-scroll and `localStorage` history. Hosted-model requests pass an in-memory rate limit (10 a minute, 100 a day per client). A Google key is active on the live URL, but no model reply has come back yet, so it answers from a local rule engine (labelled as such), not a language model; a hosted model on the live URL is a TODO ([`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) §1) |
 | Deployed demo | ✅ [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app) (Vercel, imported from `main`; mock API, no real wallet payouts) |
 
 ## Loan Lifecycle State Machine
@@ -292,8 +292,9 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
     100 a day per client, `429` + `Retry-After`, applied only when a paid model would be called.
   - **Evidence:** 85 new Vitest tests (333 total) and 13 Chromium checks per width against the real
     route. The browser run caught a scroll race that jsdom missed. **Not yet shown:** a hosted model
-    answering on the live URL (no real key is active there), and a limit that holds across server
-    instances (the limiter is per instance; the provider spend cap is the guarantee).
+    answering on the live URL (a Google key is active, but `gemini-flash-latest` has not returned a
+    reply, so the chat falls back to the local engine and says so), and a rate limit that holds under
+    a live burst (13 simultaneous requests all passed; it needs a shared store before a paid key).
 
 ## License
 
