@@ -2,7 +2,7 @@
 import { APICallError } from 'ai'
 import { MockLanguageModelV4, simulateReadableStream } from 'ai/test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { POST } from '../../../app/api/chat/route.ts'
+import { GET, POST } from '../../../app/api/chat/route.ts'
 import {
   createSseParser,
   type ChatStreamEvent,
@@ -12,6 +12,7 @@ import { APPLICANT_PROFILES } from '../../../features/scoring/applicants.ts'
 import { scoreApplicant } from '../../../features/scoring/scoreEngine.ts'
 import { LEGAL_TRANSITIONS } from '../../../features/disbursement/loanStateMachine.ts'
 import { buildLocalReply, detectTopic, streamLocalReply, tokenize } from '../local-engine.ts'
+import { chatStats } from '../chat-stats.ts'
 import { chatRateLimiter } from '../rate-limit.ts'
 import {
   LOCAL_ENGINE_LABEL,
@@ -59,6 +60,7 @@ afterEach(() => {
   injected.engine = null
   injected.timeout = null
   chatRateLimiter.reset()
+  chatStats.reset()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
 })
@@ -566,6 +568,104 @@ describe('cancellation reaches the engine, not just the response', () => {
     controller.abort()
     expect((await next).done).toBe(true)
     expect(Date.now() - started).toBeLessThan(2_000)
+  })
+})
+
+describe('GET /api/chat — counters that make the server side checkable without logs', () => {
+  const status = async (): Promise<Record<string, unknown>> => (await GET().json()) as Record<string, unknown>
+
+  it('reports the engine and the limiter rules, and nothing identifying', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '')
+    vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY', '')
+    const response = GET()
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    const body = (await response.json()) as Record<string, unknown>
+    expect(Object.keys(body).sort()).toEqual(['engine', 'instance', 'instanceStartedAt', 'last', 'outcomes', 'rateLimit', 'rateLimited'])
+    expect(body.engine).toEqual({ kind: 'local', label: LOCAL_ENGINE_LABEL })
+    expect(body.outcomes).toEqual({ done: 0, aborted: 0, error: 0, fallback: 0 })
+    expect(body.rateLimit).toMatchObject({ trackedClients: 0, rules: [{ limit: 10 }, { limit: 100 }] })
+    expect(body.last).toBeNull()
+  })
+
+  it('counts a completed model reply as done', async () => {
+    injected.engine = {
+      kind: 'google',
+      label: 'mock-model',
+      model: mockModel([
+        { type: 'stream-start', warnings: [] },
+        { type: 'text-start', id: 't1' },
+        { type: 'text-delta', id: 't1', delta: 'ok' },
+        { type: 'text-end', id: 't1' },
+        { type: 'finish', finishReason: { unified: 'stop', raw: 'STOP' }, usage: USAGE },
+      ]),
+    }
+    await (await POST(chatRequest(ask('A private question about borrower-42.'), undefined, '203.0.113.7'))).text()
+
+    const body = await status()
+    expect(body.outcomes).toEqual({ done: 1, aborted: 0, error: 0, fallback: 0 })
+    expect(body.last).toMatchObject({ outcome: 'done', deltas: 1, outputTokens: 5, status: null })
+    expect(body.rateLimit).toMatchObject({ trackedClients: 1 })
+    // Counters only: neither the question nor the client address appears.
+    expect(JSON.stringify(body)).not.toContain('borrower-42')
+    expect(JSON.stringify(body)).not.toContain('203.0.113.7')
+  })
+
+  it('counts a client disconnect as aborted, with how far the reply had got', async () => {
+    const model = new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: new ReadableStream<StreamPart>({
+          start(controller) {
+            controller.enqueue({ type: 'stream-start', warnings: [] })
+            controller.enqueue({ type: 'text-start', id: 't1' })
+            controller.enqueue({ type: 'text-delta', id: 't1', delta: 'Streaming ' })
+          },
+        }),
+      }),
+    })
+    injected.engine = { kind: 'google', label: 'mock-model', model }
+    const controller = new AbortController()
+    const response = await POST(chatRequest(ask('Explain the ledger.'), controller.signal))
+    const reader = response.body?.getReader()
+    if (reader === undefined) throw new Error('expected a streaming body')
+    await reader.read() // meta
+    await reader.read() // first token
+    controller.abort()
+    for (;;) {
+      const { done } = await reader.read()
+      if (done) break
+    }
+
+    const body = await status()
+    expect(body.outcomes).toEqual({ done: 0, aborted: 1, error: 0, fallback: 0 })
+    expect(body.last).toMatchObject({ outcome: 'aborted', deltas: 1, outputTokens: null })
+  })
+
+  it('counts requests the rate limiter refused', async () => {
+    injected.engine = {
+      kind: 'google',
+      label: 'mock-model',
+      model: new MockLanguageModelV4({
+        doStream: async () => ({
+          stream: simulateReadableStream<StreamPart>({
+            chunks: [
+              { type: 'stream-start', warnings: [] },
+              { type: 'text-start', id: 't1' },
+              { type: 'text-delta', id: 't1', delta: 'ok' },
+              { type: 'text-end', id: 't1' },
+              { type: 'finish', finishReason: { unified: 'stop', raw: 'STOP' }, usage: USAGE },
+            ],
+            initialDelayInMs: null,
+            chunkDelayInMs: null,
+          }),
+        }),
+      }),
+    }
+    for (let request = 1; request <= 12; request += 1) {
+      await (await POST(chatRequest(ask('Explain the ledger.'), undefined, '203.0.113.7'))).text()
+    }
+    const body = await status()
+    expect(body.rateLimited).toBe(2)
+    expect(body.outcomes).toMatchObject({ done: 10 })
   })
 })
 

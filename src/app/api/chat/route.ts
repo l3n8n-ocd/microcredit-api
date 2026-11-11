@@ -30,8 +30,9 @@ import {
   type ChatStreamEvent,
   type WireMessage,
 } from '../../../features/ai-copilot/chatProtocol.ts'
+import { chatStats, type ModelOutcome } from '../../../lib/ai/chat-stats.ts'
 import { streamLocalReply } from '../../../lib/ai/local-engine.ts'
-import { chatRateLimiter, clientKey, describeWait } from '../../../lib/ai/rate-limit.ts'
+import { CHAT_RATE_LIMIT, chatRateLimiter, clientKey, describeWait } from '../../../lib/ai/rate-limit.ts'
 import {
   MODEL_CONFIG,
   buildSystemPrompt,
@@ -66,9 +67,6 @@ async function streamFromLocalEngine(messages: readonly WireMessage[], signal: A
   if (!signal.aborted) send({ type: 'done', finishReason: 'stop' })
 }
 
-/** How one hosted-model request ended, as seen by the server. */
-type ModelOutcome = 'done' | 'aborted' | 'error' | 'fallback'
-
 /**
  * One structured log line per hosted-model request: counts and timing only.
  * No prompt, no reply text, no IP, no key (CLAUDE.md §8).
@@ -91,6 +89,14 @@ function logModelRequest(entry: {
   readonly status: number | null
 }): void {
   console.info(JSON.stringify({ event: 'chat.model', ...entry }))
+  // The same facts, minus the part counts, kept in memory for `GET /api/chat`.
+  chatStats.recordOutcome({
+    outcome: entry.outcome,
+    deltas: entry.deltas,
+    outputTokens: entry.outputTokens,
+    ms: entry.ms,
+    status: entry.status,
+  })
 }
 
 /** What a hosted model has produced so far in one request. */
@@ -226,6 +232,34 @@ async function relayModelStream(
   return outputTokens
 }
 
+/**
+ * GET /api/chat — status, counters only.
+ *
+ * Reports which engine this deployment uses, the rate-limit rules, how many
+ * clients the limiter is tracking, and how hosted-model requests ended on THIS
+ * server instance (done / aborted / error / fallback, plus the last one's
+ * timing). It contains no prompt, reply, IP or key.
+ *
+ * It answers two questions without access to the host's logs:
+ *   - Server-side cancellation: press Stop, then read `last`. `outcome:
+ *     "aborted"` with a small `deltas` means the disconnect reached this
+ *     function and the provider call was cancelled.
+ *   - Rate limit: `rateLimited` counts requests refused with 429.
+ * `instance` changes when a different server instance answers; compare two
+ * readings only when it matches.
+ */
+export function GET(): Response {
+  const engine = describeEngine()
+  return Response.json(
+    {
+      engine,
+      rateLimit: { rules: CHAT_RATE_LIMIT, appliesTo: 'hosted model requests', trackedClients: chatRateLimiter.size() },
+      ...chatStats.snapshot(),
+    },
+    { headers: { 'Cache-Control': 'no-store' } },
+  )
+}
+
 export async function POST(req: Request): Promise<Response> {
   // 1. Validate. The body is `unknown` until `parseChatRequest` has checked every field.
   let body: unknown
@@ -246,6 +280,7 @@ export async function POST(req: Request): Promise<Response> {
   if (engine.kind !== 'local') {
     const verdict = chatRateLimiter.check(clientKey(req.headers))
     if (!verdict.ok) {
+      chatStats.recordRateLimited()
       return Response.json(
         { error: `Too many requests from this network. Try again in ${describeWait(verdict.retryAfterSeconds)}.` },
         { status: 429, headers: { 'Retry-After': String(verdict.retryAfterSeconds) } },
