@@ -580,7 +580,7 @@ describe('GET /api/chat — counters that make the server side checkable without
     const response = GET()
     expect(response.headers.get('cache-control')).toBe('no-store')
     const body = (await response.json()) as Record<string, unknown>
-    expect(Object.keys(body).sort()).toEqual(['engine', 'instance', 'instanceStartedAt', 'last', 'outcomes', 'rateLimit', 'rateLimited'])
+    expect(Object.keys(body).sort()).toEqual(['commit', 'engine', 'instance', 'instanceStartedAt', 'last', 'outcomes', 'rateLimit', 'rateLimited'])
     expect(body.engine).toEqual({ kind: 'local', label: LOCAL_ENGINE_LABEL })
     expect(body.outcomes).toEqual({ done: 0, aborted: 0, error: 0, fallback: 0 })
     expect(body.rateLimit).toMatchObject({ trackedClients: 0, rules: [{ limit: 10 }, { limit: 100 }] })

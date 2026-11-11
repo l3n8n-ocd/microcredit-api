@@ -253,6 +253,8 @@ export function GET(): Response {
   return Response.json(
     {
       engine,
+      // Which commit this deployment was built from (set by the host; public, the repo is public).
+      commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       rateLimit: { rules: CHAT_RATE_LIMIT, appliesTo: 'hosted model requests', trackedClients: chatRateLimiter.size() },
       ...chatStats.snapshot(),
     },
