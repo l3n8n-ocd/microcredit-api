@@ -151,7 +151,7 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (337 tests)                |
+| `npm test`          | Run the Vitest suite once (344 tests)                |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -290,7 +290,7 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
     no invented borrowers), 4 starter prompts.
   - **Rate limit:** [`src/lib/ai/rate-limit.ts`](./src/lib/ai/rate-limit.ts) — in-memory sliding window, 10 a minute and
     100 a day per client, `429` + `Retry-After`, applied only when a paid model would be called.
-  - **Evidence:** 89 new Vitest tests (337 total) and 13 Chromium checks per width against the real
+  - **Evidence:** 96 new Vitest tests (344 total) and 13 Chromium checks per width against the real
     route. The browser run caught a scroll race that jsdom missed. On the live URL `gemini-3.5-flash-lite` (Google free tier)
     streamed replies, Stop kept a partial reply, and a follow-up was answered in context.
     **Not yet shown:** whether Vercel cancels the model call server-side on Stop, a Claude model, and

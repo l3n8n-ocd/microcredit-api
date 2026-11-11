@@ -28,16 +28,47 @@ async function readErrorMessage(response: Response): Promise<string> {
 }
 
 /**
+ * Tells the server to stop generating one reply. Fire-and-forget: Stop has
+ * already updated the UI, so nothing waits on this and a failure is ignored.
+ * `keepalive` lets the request finish even if the page is being closed.
+ */
+function cancelOnServer(requestId: string): void {
+  void fetch(`/api/chat?requestId=${requestId}`, { method: 'DELETE', keepalive: true }).catch(() => {})
+}
+
+/**
  * Production transport: POST the history, then read the SSE body chunk by
- * chunk. `fetch` gets the abort signal, so Stop cancels the HTTP request
- * itself: the reader rejects with `AbortError` and the server sees the
- * disconnect.
+ * chunk.
+ *
+ * Stop cancels in two ways, because the first is not reliable on its own:
+ *   1. `fetch` gets the abort signal, so the HTTP request itself is torn down.
+ *      The server only notices if every proxy on the way passes that on.
+ *   2. An explicit `DELETE /api/chat?requestId=…` names this request, and the
+ *      server aborts the model call directly.
  */
 export const fetchChatTransport: ChatTransport = async ({ messages, signal, onEvent }) => {
+  const requestId = crypto.randomUUID()
+  const onAbort = (): void => cancelOnServer(requestId)
+  signal.addEventListener('abort', onAbort, { once: true })
+
+  try {
+    await streamChat(requestId, messages, signal, onEvent)
+  } finally {
+    // A reply that ended on its own has nothing left to cancel.
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
+async function streamChat(
+  requestId: string,
+  messages: ChatTransportArgs['messages'],
+  signal: AbortSignal,
+  onEvent: ChatTransportArgs['onEvent'],
+): Promise<void> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, requestId }),
     signal,
   })
   if (!response.ok || response.body === null) throw new Error(await readErrorMessage(response))

@@ -224,6 +224,52 @@ describe('fetchChatTransport', () => {
     expect(events).toEqual([])
   })
 
+  it('sends a request ID with the chat request, and a DELETE for that ID when the signal aborts', async () => {
+    const calls: { url: string; method: string; body: unknown; keepalive: boolean }[] = []
+    vi.stubGlobal('fetch', (url: string, init: RequestInit = {}) => {
+      calls.push({
+        url,
+        method: init.method ?? 'GET',
+        body: typeof init.body === 'string' ? (JSON.parse(init.body) as unknown) : null,
+        keepalive: init.keepalive === true,
+      })
+      if (init.method === 'DELETE') return Promise.resolve(Response.json({ cancelled: true }))
+      // The POST never answers; it rejects the way fetch does when its signal aborts.
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      })
+    })
+
+    const controller = new AbortController()
+    const pending = fetchChatTransport({
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: controller.signal,
+      onEvent: () => {},
+    })
+    controller.abort() // the Stop button
+    await expect(pending).rejects.toThrow('Aborted')
+
+    expect(calls.map((call) => call.method)).toEqual(['POST', 'DELETE'])
+    const posted = calls[0]?.body
+    const requestId = typeof posted === 'object' && posted !== null && 'requestId' in posted ? posted.requestId : undefined
+    expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+    expect(calls[1]).toMatchObject({ url: `/api/chat?requestId=${String(requestId)}`, keepalive: true })
+  })
+
+  it('sends no DELETE for a reply that finished on its own, even if the signal aborts later', async () => {
+    const methods: string[] = []
+    vi.stubGlobal('fetch', (_url: string, init: RequestInit = {}) => {
+      methods.push(init.method ?? 'GET')
+      return Promise.resolve(
+        new Response(encodeSseFrame({ type: 'done', finishReason: 'stop' }), { headers: { 'Content-Type': 'text/event-stream' } }),
+      )
+    })
+    const controller = new AbortController()
+    await fetchChatTransport({ messages: [{ role: 'user', content: 'hi' }], signal: controller.signal, onEvent: () => {} })
+    controller.abort() // e.g. the component unmounting afterwards
+    expect(methods).toEqual(['POST'])
+  })
+
   it('decodes a streamed body whose multi-byte characters are split across chunks', async () => {
     const frames = new TextEncoder().encode(
       encodeSseFrame({ type: 'token', text: '₱5,000.00 Σ' }) + encodeSseFrame({ type: 'done', finishReason: 'stop' }),

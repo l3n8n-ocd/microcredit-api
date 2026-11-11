@@ -16,7 +16,9 @@
  * local engine costs nothing and is not limited. See src/lib/ai/rate-limit.ts
  * for what an in-memory limit does and does not guarantee.
  *
- * Cancellation: when the browser aborts its fetch (the Stop button), Next
+ * Cancellation, two ways. (1) Explicit: Stop sends `DELETE /api/chat?requestId=…`
+ * and the handler below aborts that request's controller. (2) Implicit: when
+ * the browser aborts its fetch (the Stop button), Next
  * aborts `req.signal` and/or cancels the response stream. Both feed one
  * AbortController, which stops the model call or the local token loop. No
  * `done` frame is sent after an abort: the client already knows it stopped.
@@ -26,10 +28,12 @@
 import { APICallError, RetryError, streamText } from 'ai'
 import {
   encodeSseFrame,
+  isRequestId,
   parseChatRequest,
   type ChatStreamEvent,
   type WireMessage,
 } from '../../../features/ai-copilot/chatProtocol.ts'
+import { activeRequests } from '../../../lib/ai/active-requests.ts'
 import { chatStats, type ModelOutcome } from '../../../lib/ai/chat-stats.ts'
 import { streamLocalReply } from '../../../lib/ai/local-engine.ts'
 import { CHAT_RATE_LIMIT, chatRateLimiter, clientKey, describeWait } from '../../../lib/ai/rate-limit.ts'
@@ -272,7 +276,7 @@ export async function POST(req: Request): Promise<Response> {
   }
   const parsed = parseChatRequest(body)
   if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
-  const { messages } = parsed
+  const { messages, requestId } = parsed
 
   // 2. Pick the engine. Keys are read here, on the server, per request.
   const engine = resolveChatEngine()
@@ -290,11 +294,14 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  // 4. One abort signal for "the client went away", whichever way the platform reports it.
+  // 4. One abort signal for "stop this reply", whoever says so: the connection
+  //    closing (`req.signal`, the stream's `cancel`) or an explicit DELETE that
+  //    names this request.
   const abort = new AbortController()
   const onRequestAbort = (): void => abort.abort()
   if (req.signal.aborted) abort.abort()
   else req.signal.addEventListener('abort', onRequestAbort, { once: true })
+  if (requestId !== null) activeRequests.register(requestId, abort)
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
@@ -368,6 +375,7 @@ export async function POST(req: Request): Promise<Response> {
         if (!abort.signal.aborted) send({ type: 'error', message: 'The copilot could not produce a reply.' })
       } finally {
         req.signal.removeEventListener('abort', onRequestAbort)
+        if (requestId !== null) activeRequests.release(requestId)
         try {
           controller.close()
         } catch {
@@ -381,4 +389,22 @@ export async function POST(req: Request): Promise<Response> {
   })
 
   return new Response(stream, { headers: SSE_HEADERS })
+}
+
+/**
+ * DELETE /api/chat?requestId=<uuid> — stop one reply.
+ *
+ * Sent by the Stop button alongside the fetch abort. `cancelled: true` means
+ * this server instance was running that request and has aborted it: the model
+ * call is cancelled and no more tokens are generated. `cancelled: false` means
+ * the request is not running here (already finished, or on another instance).
+ */
+export function DELETE(req: Request): Response {
+  const requestId = new URL(req.url).searchParams.get('requestId')
+  if (!isRequestId(requestId)) {
+    return Response.json({ error: 'requestId must be the UUID sent with the chat request.' }, { status: 400 })
+  }
+  const cancelled = activeRequests.cancel(requestId)
+  chatStats.recordCancel(cancelled)
+  return Response.json({ cancelled }, { headers: { 'Cache-Control': 'no-store' } })
 }

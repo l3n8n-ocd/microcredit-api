@@ -2,7 +2,7 @@
 import { APICallError } from 'ai'
 import { MockLanguageModelV4, simulateReadableStream } from 'ai/test'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { GET, POST } from '../../../app/api/chat/route.ts'
+import { DELETE, GET, POST } from '../../../app/api/chat/route.ts'
 import {
   createSseParser,
   type ChatStreamEvent,
@@ -580,7 +580,7 @@ describe('GET /api/chat — counters that make the server side checkable without
     const response = GET()
     expect(response.headers.get('cache-control')).toBe('no-store')
     const body = (await response.json()) as Record<string, unknown>
-    expect(Object.keys(body).sort()).toEqual(['commit', 'engine', 'instance', 'instanceStartedAt', 'last', 'outcomes', 'rateLimit', 'rateLimited'])
+    expect(Object.keys(body).sort()).toEqual(['cancels', 'commit', 'engine', 'instance', 'instanceStartedAt', 'last', 'outcomes', 'rateLimit', 'rateLimited'])
     expect(body.engine).toEqual({ kind: 'local', label: LOCAL_ENGINE_LABEL })
     expect(body.outcomes).toEqual({ done: 0, aborted: 0, error: 0, fallback: 0 })
     expect(body.rateLimit).toMatchObject({ trackedClients: 0, rules: [{ limit: 10 }, { limit: 100 }] })
@@ -666,6 +666,113 @@ describe('GET /api/chat — counters that make the server side checkable without
     const body = await status()
     expect(body.rateLimited).toBe(2)
     expect(body.outcomes).toMatchObject({ done: 10 })
+  })
+})
+
+describe('DELETE /api/chat — Stop cancels the model call by request ID', () => {
+  const REQUEST_ID = '3f2b8c1e-5d47-4a9b-8e21-0c6f7a1d9b34'
+  const cancel = (id: string | null): Response =>
+    DELETE(new Request(`http://localhost/api/chat${id === null ? '' : `?requestId=${id}`}`, { method: 'DELETE' }))
+
+  /** A model that sends one delta and then never finishes: only a cancel can end it. */
+  const endlessModel = (): MockLanguageModelV4 =>
+    new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: new ReadableStream<StreamPart>({
+          start(controller) {
+            controller.enqueue({ type: 'stream-start', warnings: [] })
+            controller.enqueue({ type: 'text-start', id: 't1' })
+            controller.enqueue({ type: 'text-delta', id: 't1', delta: 'Streaming ' })
+          },
+        }),
+      }),
+    })
+
+  it('aborts the running model call while the HTTP connection is still open', async () => {
+    const model = endlessModel()
+    injected.engine = { kind: 'google', label: 'mock-model', model }
+
+    // No AbortSignal on this request: the connection never closes. Only DELETE can stop it.
+    const response = await POST(chatRequest({ ...ask('Explain the ledger.'), requestId: REQUEST_ID }))
+    const reader = response.body?.getReader()
+    if (reader === undefined) throw new Error('expected a streaming body')
+    const events: ChatStreamEvent[] = []
+    const parser = createSseParser((event) => events.push(event))
+    const decoder = new TextDecoder()
+    while (!events.some((event) => event.type === 'token')) {
+      const { value } = await reader.read()
+      parser.push(decoder.decode(value, { stream: true }))
+    }
+    expect(model.doStreamCalls[0]?.abortSignal?.aborted).toBe(false)
+
+    const cancelled = cancel(REQUEST_ID)
+    expect(await cancelled.json()).toEqual({ cancelled: true })
+
+    // The stream ends on its own, with no further tokens and no done frame.
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parser.push(decoder.decode(value, { stream: true }))
+    }
+    expect(model.doStreamCalls[0]?.abortSignal?.aborted).toBe(true)
+    expect(joinTokens(events)).toBe('Streaming ')
+    expect(events.some((event) => event.type === 'done' || event.type === 'error')).toBe(false)
+
+    const body = (await GET().json()) as Record<string, unknown>
+    expect(body.outcomes).toEqual({ done: 0, aborted: 1, error: 0, fallback: 0 })
+    expect(body.last).toMatchObject({ outcome: 'aborted', deltas: 1 })
+    expect(body.cancels).toEqual({ received: 1, matched: 1 })
+
+    // The same ID a second time finds nothing: the request is gone.
+    expect(await cancel(REQUEST_ID).json()).toEqual({ cancelled: false })
+  })
+
+  it('stops the local rule engine the same way', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '')
+    vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY', '')
+    const body = { ...ask('Walk me through the 10 loan states.'), requestId: REQUEST_ID }
+    const full = tokenize(await buildLocalReply(body.messages)).length
+
+    const response = await POST(chatRequest(body))
+    const reader = response.body?.getReader()
+    if (reader === undefined) throw new Error('expected a streaming body')
+    const events: ChatStreamEvent[] = []
+    const parser = createSseParser((event) => events.push(event))
+    const decoder = new TextDecoder()
+    while (events.filter((event) => event.type === 'token').length < 3) {
+      const { value } = await reader.read()
+      parser.push(decoder.decode(value, { stream: true }))
+    }
+    expect(await cancel(REQUEST_ID).json()).toEqual({ cancelled: true })
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parser.push(decoder.decode(value, { stream: true }))
+    }
+    expect(events.filter((event) => event.type === 'token').length).toBeLessThan(full)
+    expect(events.some((event) => event.type === 'done')).toBe(false)
+  })
+
+  it('forgets a request once it has finished, so a late cancel does nothing', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '')
+    vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY', '')
+    await (await POST(chatRequest({ ...ask('Write me a poem about the sea.'), requestId: REQUEST_ID }))).text()
+    expect(await cancel(REQUEST_ID).json()).toEqual({ cancelled: false })
+  })
+
+  it('answers an unknown ID with cancelled: false and a malformed one with 400', async () => {
+    expect(await cancel('00000000-0000-4000-8000-000000000000').json()).toEqual({ cancelled: false })
+    expect(cancel(null).status).toBe(400)
+    expect(cancel('not-a-uuid').status).toBe(400)
+    expect(cancel(`${REQUEST_ID}'; drop table loans; --`).status).toBe(400)
+  })
+
+  it('ignores a requestId that is not a UUID instead of rejecting the chat request', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', '')
+    vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY', '')
+    const response = await POST(chatRequest({ ...ask('Write me a poem about the sea.'), requestId: 42 }))
+    expect(response.status).toBe(200)
+    await response.text()
   })
 })
 

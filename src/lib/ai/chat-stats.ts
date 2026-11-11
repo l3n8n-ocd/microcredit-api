@@ -34,12 +34,15 @@ export interface ChatStatsSnapshot {
   readonly outcomes: Readonly<Record<ModelOutcome, number>>
   /** Requests the rate limiter refused with 429 before any model call. */
   readonly rateLimited: number
+  /** Explicit cancels (`DELETE /api/chat`): how many arrived, and how many found their request on this instance. */
+  readonly cancels: { readonly received: number; readonly matched: number }
   readonly last: LastModelRequest | null
 }
 
 export interface ChatStats {
   readonly recordOutcome: (entry: Omit<LastModelRequest, 'at'>) => void
   readonly recordRateLimited: () => void
+  readonly recordCancel: (matched: boolean) => void
   readonly snapshot: () => ChatStatsSnapshot
   readonly reset: () => void
 }
@@ -49,9 +52,13 @@ export function createChatStats(now: () => Date = () => new Date()): ChatStats {
   const instanceStartedAt = now().toISOString()
   let outcomes: Record<ModelOutcome, number> = { done: 0, aborted: 0, error: 0, fallback: 0 }
   let rateLimited = 0
+  let cancels = { received: 0, matched: 0 }
   let last: LastModelRequest | null = null
 
   return {
+    recordCancel(matched) {
+      cancels = { received: cancels.received + 1, matched: cancels.matched + (matched ? 1 : 0) }
+    },
     recordOutcome(entry) {
       outcomes = { ...outcomes, [entry.outcome]: outcomes[entry.outcome] + 1 }
       last = { ...entry, at: now().toISOString() }
@@ -60,11 +67,12 @@ export function createChatStats(now: () => Date = () => new Date()): ChatStats {
       rateLimited += 1
     },
     snapshot() {
-      return { instance, instanceStartedAt, outcomes: { ...outcomes }, rateLimited, last }
+      return { instance, instanceStartedAt, outcomes: { ...outcomes }, rateLimited, cancels, last }
     },
     reset() {
       outcomes = { done: 0, aborted: 0, error: 0, fallback: 0 }
       rateLimited = 0
+      cancels = { received: 0, matched: 0 }
       last = null
     },
   }

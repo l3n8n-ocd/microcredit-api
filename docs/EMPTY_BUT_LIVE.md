@@ -71,7 +71,7 @@ Voice Card: "Direct, technical, plainspoken, concrete, zero buzzwords."
     (mutation check: delete the replay lookup, 4 tests fail); a "Simulate double-click / network retry"
     control; the test sits on the first screen.
   Outcome: live at microcredit-api-beta.vercel.app; a double-click sends one request, a same-key retry
-    gets the original receipt, a stale If-Match gets 409; 337-test Vitest suite + a Playwright
+    gets the original receipt, a stale If-Match gets 409; 344-test Vitest suite + a Playwright
     above-the-fold check in CI.
 
 02. Node2Shell (CVE-2026-111497) — sandboxed reproduction & remediation (VulnTech)

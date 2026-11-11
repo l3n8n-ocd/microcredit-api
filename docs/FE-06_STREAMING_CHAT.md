@@ -305,7 +305,7 @@ values are treated as "no key".
 | --- | --- |
 | `npm run typecheck` | 0 errors |
 | `npm run lint` | 0 warnings |
-| `npm test` | 337 passed in 15 files (248 before FE-06; 89 new) |
+| `npm test` | 344 passed in 15 files (248 before FE-06; 96 new) |
 | `npm run build` | `/api/chat` and `/underwriting` are dynamic (`ƒ`) |
 | `npm run test:e2e` | 44 checks passed: the 18 existing fold and overflow checks, plus 13 Copilot checks at each of 375px and 1280px |
 
@@ -314,7 +314,7 @@ New tests:
 (11, component),
 [`chatCore.test.ts`](../src/features/ai-copilot/__tests__/chatCore.test.ts) (20: reducer, SSE parser,
 Markdown parser, fetch transport), [`chatRoute.test.ts`](../src/lib/ai/__tests__/chatRoute.test.ts)
-(43: route, status counters, rate limit, log line, timeouts, engine resolution, system prompt, local engine),
+(48: route, explicit cancel, status counters, rate limit, log line, timeouts, engine resolution, system prompt, local engine),
 [`rateLimit.test.ts`](../src/lib/ai/__tests__/rateLimit.test.ts) (9),
 [`googleProvider.test.ts`](../src/lib/ai/__tests__/googleProvider.test.ts) (3: the real Google provider
 over HTTP) and [`env.test.ts`](../src/utils/env.test.ts) (3).

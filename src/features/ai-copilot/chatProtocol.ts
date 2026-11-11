@@ -111,8 +111,19 @@ export function createSseParser(onEvent: (event: ChatStreamEvent) => void): { pu
   }
 }
 
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * A request ID is a UUID the browser makes for one chat request. It lets Stop
+ * name the reply to cancel (`DELETE /api/chat?requestId=…`). Anything that is
+ * not UUID-shaped is treated as absent, never as an error.
+ */
+export function isRequestId(value: unknown): value is string {
+  return typeof value === 'string' && REQUEST_ID.test(value)
+}
+
 export type ChatRequestParse =
-  | { readonly ok: true; readonly messages: readonly WireMessage[] }
+  | { readonly ok: true; readonly messages: readonly WireMessage[]; readonly requestId: string | null }
   | { readonly ok: false; readonly error: string }
 
 /**
@@ -144,5 +155,5 @@ export function parseChatRequest(body: unknown): ChatRequestParse {
   }
 
   if (messages.at(-1)?.role !== 'user') return { ok: false, error: 'The last message must be from the user.' }
-  return { ok: true, messages }
+  return { ok: true, messages, requestId: isRequestId(body.requestId) ? body.requestId : null }
 }

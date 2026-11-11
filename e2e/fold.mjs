@@ -6,8 +6,8 @@
  *    and Simulate produces exactly one 201 Created + one 201 Idempotent replay.
  * 2. All 5 SPEC.md routes load at 375px and 1280px with zero horizontal overflow.
  * 3. The AI Copilot on `/underwriting` (FE-06), at 375px and 1280px, against the
- *    real `/api/chat` route: tokens arrive one by one, Stop aborts the request
- *    and keeps the partial reply, a follow-up sends straight away, scrolling up
+ *    real `/api/chat` route: tokens arrive one by one, Stop aborts the request,
+ *    the server confirms it cancelled the reply, the partial reply is kept, a follow-up sends straight away, scrolling up
  *    releases auto-scroll, and the conversation survives a reload.
  *
  * Fonts: the app self-hosts Plus Jakarta Sans / JetBrains Mono, but a low-end
@@ -104,6 +104,10 @@ try {
     page.on('requestfailed', (request) => {
       if (request.url().endsWith('/api/chat')) aborted.push(request.failure()?.errorText ?? '')
     })
+    // Stop also sends an explicit cancel. The server counts the ones that found
+    // their request still running and aborted it (GET /api/chat).
+    const matchedCancels = async () => (await (await page.request.get(`${BASE}/api/chat`)).json()).cancels.matched
+    const cancelsBefore = await matchedCancels()
 
     await page.goto(`${BASE}/underwriting`, { waitUntil: 'networkidle' })
     const chat = page.locator('#copilot')
@@ -148,6 +152,11 @@ try {
     await page.waitForTimeout(400)
     check(stoppedAt > 0 && (await bodyLength()) === stoppedAt, `Stop keeps the partial reply and no token lands after it (${stoppedAt} chars)`)
     check(aborted.length === 1, `Stop aborted the /api/chat request (${aborted.join(', ') || 'no aborted request seen'})`)
+    const cancelsAfter = await matchedCancels()
+    check(
+      cancelsAfter === cancelsBefore + 1,
+      `Stop's DELETE /api/chat found the running reply and the server aborted it (matched ${cancelsBefore} → ${cancelsAfter})`,
+    )
 
     // 3d. Stop, then send again: the composer is usable at once and the next reply completes.
     const input = chat.getByLabel('Ask the copilot')
