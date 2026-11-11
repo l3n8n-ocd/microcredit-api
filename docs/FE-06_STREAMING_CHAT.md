@@ -26,9 +26,13 @@ Read this first. It is the honest scope of the deliverable (`CLAUDE.md` §9.2 ru
 | "Stop, then send again" works for any number of turns | Component test loops stop → send 5 times; e2e sends a follow-up right after Stop | ✅ Verified |
 | Multi-turn context is sent and used | Component test asserts the full history on request 2; e2e: "and for Liza?" resolves to Liza's score | ✅ Verified |
 | The hosted-model path calls the AI SDK's `streamText` | Route test drives the real `streamText` with the SDK's `MockLanguageModelV4` | ✅ Verified against a mock |
-| A real Claude or Gemini model answers on the live URL | A Google key is active (`/api/health`: `GOOGLE_GENERATIVE_AI_API_KEY: true`) and Google accepts it: a retired model ID returned `404`, and a burst returned Google's own `429`. But no reply text has come back yet. `gemini-flash-latest` sent no response within 20 s on every attempt, so each reply fell back to the local engine, labelled `model call timed out: no response` | ⏳ **TODO:** set `GOOGLE_GENERATIVE_AI_MODEL` to a model ID that answers for this key in AI Studio, redeploy, confirm a reply labelled with the model |
-| Server-side cancellation on Vercel stops the model call | Unit test proves the abort signal reaches the model call. Each hosted request now writes one `chat.model` log line with its outcome (§6), but no hosted request has run on Vercel yet | ⏳ **TODO:** press Stop on the live URL, read the log line |
+| A real model answers on the live URL | `gemini-3.5-flash-lite` (Google free tier) on 2026-11-11, in Chromium: first text after 4.4 s, text length grew across 10 samples, and a follow-up ("Which of those states are terminal?") was answered from the earlier turn: `REJECTED`, `CANCELLED`, `SETTLED`, `DEFAULTED`. No Claude model has been run | ✅ Verified for Gemini; ⏳ Claude untested |
+| Server-side cancellation on Vercel stops the model call | Client side is verified on the live URL with the real model: Stop kept 520 characters, nothing landed in the next 2 s, the request ended `net::ERR_ABORTED`. Whether the function saw the disconnect is in the `chat.model` log line for 2026-11-11T00:12:43Z, which has not been read yet | ⏳ **TODO:** read that log line (§6) |
 | Rate limiting on `/api/chat` | In-memory sliding window, 10 a minute and 100 a day per client; route test: 10 replies, then `429` and the model is not called. **On the live URL it did not hold:** 13 simultaneous requests all returned `200` (either several server instances, or several egress IPs on the test machine; not determined) | ⚠️ Built and unit-tested; not effective under a live burst (§6) |
+
+The live URL currently answers with `gemini-3.5-flash-lite`. That depends on a free-tier key and its
+daily quota: when the quota runs out, or the key is removed, replies come from the local rule engine and
+the label under each reply says so.
 
 **With no key set, the reply does not come from a language model.** It comes from a local rule engine,
 [`src/lib/ai/local-engine.ts`](../src/lib/ai/local-engine.ts), and the UI says so under every reply:
@@ -334,6 +338,13 @@ Real captures from `next start` (local engine), 2× scale.
 | Scrolled up mid-stream: "Jump to latest" (1280px) | Stopped mid-stream, follow-up typed (375px) | Empty state with starter chips (375px) |
 | --- | --- | --- |
 | ![The log is scrolled to the top while a reply streams; a pill reads "Jump to latest (streaming…)"](./assets/fe-06/fe-06-jump-desktop-1280.png) | ![A partial reply ends with a "[Stopped mid-stream]" badge; the input holds the next question and Send is available](./assets/fe-06/fe-06-stopped-mobile-375.png) | ![Four starter prompt chips above the message field on a 375px screen](./assets/fe-06/fe-06-empty-mobile-375.png) |
+
+### Live, with a hosted model
+
+![The live chat with engine gemini-3.5-flash-lite: a reply about the 10 loan states cut off mid-sentence with a "[Stopped mid-stream]" badge, and the cursor back in the message field](./assets/fe-06/fe-06-live-model-stopped-1280.png)
+
+Captured from <https://microcredit-api-beta.vercel.app/underwriting#copilot> on 2026-11-11. The model
+is named in the header and under the reply. Stop was pressed 4.9 s after send.
 
 ## 9 · Does this serve the One Claim?
 

@@ -45,14 +45,17 @@ export const MODEL_CONFIG = {
   anthropicModel: 'claude-opus-5-5',
   /**
    * Default Google model, used only when `GOOGLE_GENERATIVE_AI_API_KEY` is set
-   * and no Anthropic key is. This is Google's moving alias for the current
-   * Flash model, not a pinned version: the first default here was the pinned
-   * `gemini-2.5-flash`, which Google had already retired (the live call
-   * returned HTTP 404). An alias keeps the demo answering across retirements;
-   * the cost is that the model behind it can change without a deploy. Pin a
-   * version with `GOOGLE_GENERATIVE_AI_MODEL` when that matters.
+   * and no Anthropic key is. Chosen from what the live deployment showed with a
+   * free-tier key, not from a list:
+   *   gemini-2.5-flash       HTTP 404 (retired)
+   *   gemini-flash-latest    accepted, then no response for 55 s
+   *   gemini-4-argon         HTTP 429 (no free-tier quota)
+   *   gemini-3.5-flash-lite  streamed a reply; first text in 4 to 8 s
+   * A pinned ID will be retired one day. When it is, the chat falls back to the
+   * local engine labelled "HTTP 404", and `GOOGLE_GENERATIVE_AI_MODEL` overrides
+   * this without a code change.
    */
-  googleModel: 'gemini-flash-latest',
+  googleModel: 'gemini-3.5-flash-lite',
   /**
    * Ceiling on one reply, thinking included. This is the main cost bound on a
    * public route. A reply that hits it ends with `finishReason: "length"`,
