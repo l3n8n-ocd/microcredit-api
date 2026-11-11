@@ -28,7 +28,7 @@ Server Components by default; `'use client'` only on interactive leaves.
 | `/ledger` | `src/app/ledger/page.tsx` | Server Component | Immutable double-entry journal (`Σ debits === Σ credits`), repayment split preview, reversal audit explainer |
 | `/advisories` | `src/app/advisories/page.tsx` | Server Component | Concurrency + security guardrail monitor (`Idempotency-Key` replay, `409` version checks, sanitized advisory format) |
 | `/health` | `src/app/health/page.tsx` + `src/app/api/health/route.ts` | Async Server Component fetches the route handler | Live system / env / ledger-invariant health check |
-| `POST /api/chat` | `src/app/api/chat/route.ts` | Route handler, Node runtime, Server-Sent Events | ✅ FE-06 streaming endpoint: AI SDK `streamText` when a server-only key is set, local rule engine otherwise |
+| `POST` / `DELETE` / `GET /api/chat` | `src/app/api/chat/route.ts` | Route handler, Node runtime, Server-Sent Events; `DELETE` cancels one reply by request ID; `GET` returns counters | ✅ FE-06 streaming endpoint: AI SDK `streamText` when a server-only key is set, local rule engine otherwise |
 
 ## Architecture notes
 
@@ -65,10 +65,11 @@ Server Components by default; `'use client'` only on interactive leaves.
 | State machine, wire protocol, transport, persistence | [`chatReducer.ts`](./src/features/ai-copilot/chatReducer.ts), [`chatProtocol.ts`](./src/features/ai-copilot/chatProtocol.ts), [`chatTransport.ts`](./src/features/ai-copilot/chatTransport.ts), [`conversationStore.ts`](./src/features/ai-copilot/conversationStore.ts) |
 
 **Shown on the live URL:** `gemini-3.5-flash-lite` (Google free tier) streams replies through
-`/api/chat`; Stop keeps the partial reply; a follow-up is answered in context. **Not yet shown:**
-server-side cancellation of the model call on Vercel, a Claude model, and a rate limit that holds under
-a live burst: the limiter is in-memory, and 13 simultaneous requests all passed. It needs a shared
-store before a paid key.
+`/api/chat`; a follow-up is answered in context; Stop keeps the partial reply and cancels the model
+call on the server through `DELETE /api/chat?requestId=…` (read back from `GET /api/chat`); one client's
+12th request in a sliding minute gets `429`. **Not yet shown:** a Claude model, and a rate limit that
+holds across server instances or many addresses: the limiter is in-memory and needs a shared store
+before a paid key.
 
 Each AI route is server-only and keys never reach the client. The local engine computes every number
 from the domain functions; the hosted-model path is constrained by a system prompt generated from the
@@ -87,6 +88,7 @@ same functions, and FE-07 tools will replace that snapshot (`CLAUDE.md` §9.2 ru
 
 - `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 344 tests),
   `npm run build` (next build), `npm run test:e2e` (Playwright: above-the-fold on `/` under the
-  worst-case fallback font, all 5 routes at 375px and 1280px with zero horizontal overflow, and 13 AI
-  Copilot checks per width against the real `/api/chat`: token-by-token streaming, Stop, send-again,
+  worst-case fallback font, all 5 routes at 375px and 1280px with zero horizontal overflow, and 14 AI
+  Copilot checks per width against the real `/api/chat`: token-by-token streaming, Stop, server-confirmed
+  cancel, send-again,
   auto-scroll release, persistence).

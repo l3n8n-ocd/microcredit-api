@@ -27,8 +27,9 @@ Read this first. It is the honest scope of the deliverable (`CLAUDE.md` §9.2 ru
 | Multi-turn context is sent and used | Component test asserts the full history on request 2; e2e: "and for Liza?" resolves to Liza's score | ✅ Verified |
 | The hosted-model path calls the AI SDK's `streamText` | Route test drives the real `streamText` with the SDK's `MockLanguageModelV4` | ✅ Verified against a mock |
 | A real model answers on the live URL | `gemini-3.5-flash-lite` (Google free tier) on 2026-11-11, in Chromium: first text after 4.4 s, text length grew across 10 samples, and a follow-up ("Which of those states are terminal?") was answered from the earlier turn: `REJECTED`, `CANCELLED`, `SETTLED`, `DEFAULTED`. No Claude model has been run | ✅ Verified for Gemini; ⏳ Claude untested |
-| Server-side cancellation on Vercel stops the model call | Client side is verified on the live URL with the real model: Stop kept 520 characters, nothing landed in the next 2 s, the request ended `net::ERR_ABORTED`. Whether the function saw the disconnect is in the `chat.model` log line for 2026-11-11T00:12:43Z, which has not been read yet | ⏳ **TODO:** read that log line (§6) |
-| Rate limiting on `/api/chat` | In-memory sliding window, 10 a minute and 100 a day per client; route test: 10 replies, then `429` and the model is not called. **On the live URL it did not hold:** 13 simultaneous requests all returned `200` (either several server instances, or several egress IPs on the test machine; not determined) | ⚠️ Built and unit-tested; not effective under a live burst (§6) |
+| Stop cancels the model call on the server, on Vercel | Live URL, 2026-11-11, real model, read from `GET /api/chat`. Through the Stop button in Chromium: the page sent `POST` then `DELETE`, and the server recorded `outcome: aborted` after 14 chunks at 5,921 ms (Stop was clicked at 5,943 ms). By script: `DELETE` answered `{"cancelled":true}`, server recorded `aborted` after 6 chunks. The same prompt left alone ran to 40 and 44 chunks. No `done` followed either cancel | ✅ Verified (explicit cancel) |
+| Closing the connection alone cancels the model call | Not observed. A request dropped by the client 4.2 s in, after 11 chunks, was recorded as `done` with 40 chunks and 2,106 output tokens; the same with `supportsCancellation` on. The test client reaches Vercel through a proxy, so this may be the proxy and not Vercel | ⚠️ Not shown; this is why Stop sends an explicit cancel |
+| Rate limiting on `/api/chat` | Live URL, 2026-11-11: 12 requests from one client over 77 s. 11 were allowed as the 60-second window slid, the 12th got `429` with `Retry-After: 8`, which is exactly what the rule gives for those arrival times. `GET /api/chat` then showed `rateLimited: 1`. Also: route test, 10 replies then `429` and the model is not called | ✅ Verified for one client on one instance; not a spend guarantee (§6) |
 
 The live URL currently answers with `gemini-3.5-flash-lite`. That depends on a free-tier key and its
 daily quota: when the quota runs out, or the key is removed, replies come from the local rule engine and
@@ -128,10 +129,20 @@ idle ──send──▶ submitted ──first token──▶ streaming ──do
 
 Stop does three things, in this order, with no waiting on the network:
 
-1. `abortRef.current.abort()` cancels the `fetch`. Each request gets its own `AbortController`.
+1. `abortRef.current.abort()` cancels the `fetch`. Each request gets its own `AbortController`. The same
+   abort makes the transport send `DELETE /api/chat?requestId=…`, which tells the server to cancel the
+   model call (below).
 2. `dispatch({ type: 'STOP' })` moves to `stopped`. The partial text stays and gets a
    `[Stopped mid-stream]` badge. Send is back in the same render.
 3. Focus returns to the input.
+
+**Stopping the server too.** Aborting a `fetch` only closes the browser's end. The first live
+measurement showed the server generating the whole reply after the client had gone: 11 chunks received,
+40 produced. A server learns about a closed connection only if every hop passes it on, so Stop no
+longer relies on that. The browser makes a UUID per request and sends it with the `POST`. The server
+keeps each running request's `AbortController` in a registry
+([`active-requests.ts`](../src/lib/ai/active-requests.ts)); the `DELETE` aborts the named one, which
+cancels the provider call. A reply that ended on its own sends no `DELETE`.
 
 Every stream event carries the ID of the assistant message it belongs to. After Stop the reducer's
 `activeId` is `null`, so a late token is dropped. After "send again" `activeId` is the new message, so a
@@ -266,30 +277,45 @@ including the case where the server accepts the request and never answers.
 Production runs Node 22 (`"engines": { "node": "22.x" }`), the same major version as CI and `.nvmrc`.
 With `">=22"` Vercel had picked Node 26, which no check in this repo ran on.
 
-### What the live burst showed about the limiter
+### What the live runs showed about the limiter
 
-Thirteen requests sent at the same moment all returned `200`. An in-memory limiter is only as wide as
-one server instance and one client key, and under a real burst at least one of those did not hold. With
-a free-tier key the cost exposure is zero: the provider quota is the cap, and when it runs out the chat
-falls back to the local engine (`HTTP 429` in the label). **Before a paid key goes on this URL, the
+- **One client is limited.** Twelve requests over one connection: eleven allowed across 77 s as the
+  window slid, the twelfth refused with `429` and `Retry-After: 8`.
+- **A burst from many addresses is not.** Thirteen simultaneous requests all returned `200`. The
+  counters explain it: from the test machine each new connection arrives from a different IP
+  (`trackedClients` rose by one per connection), so the limiter saw thirteen clients, not one.
+- **Per instance.** Two server instances were seen within a minute of each other. Each has its own log,
+  so the real ceiling is the limit times the number of warm instances.
+
+With a free-tier key the cost exposure is zero: the provider quota is the cap, and when it runs out the
+chat falls back to the local engine (`HTTP 429` in the label). **Before a paid key goes on this URL, the
 limiter needs a shared store.**
 
-### Measuring server-side cancellation
+### Reading what the server did: `GET /api/chat`
 
-Every hosted-model request writes one line to the function log. It holds counts and timing only: no
-prompt, no reply text, no IP, no key.
+The `chat.model` log line is only visible in the host's log viewer and expires. `GET /api/chat` returns
+the same facts from memory, as counters. No prompt, reply, IP or key.
 
 ```json
-{"event":"chat.model","outcome":"aborted","engine":"claude-haiku-5-5","deltas":14,"outputTokens":null,"ms":1180}
+{
+  "engine": { "kind": "google", "label": "gemini-3.5-flash-lite" },
+  "commit": "e475ec2",
+  "instance": "ab87c41b",
+  "outcomes": { "done": 10, "aborted": 2, "error": 0, "fallback": 1 },
+  "rateLimited": 1,
+  "cancels": { "received": 2, "matched": 2 },
+  "last": { "outcome": "aborted", "deltas": 14, "outputTokens": null, "ms": 5921, "status": null }
+}
 ```
 
-To measure: ask for a long answer on the live URL, press Stop after about a second, then filter the
-Vercel function logs for `chat.model`.
+That is a real reading from the live URL after the runs above (trimmed). To repeat the cancellation
+measurement: ask for a long answer, press Stop, then open `/api/chat`.
 
-| Log line | Meaning |
+| Reading | Meaning |
 | --- | --- |
-| `outcome: "aborted"`, small `deltas`, `ms` near the moment Stop was pressed | Vercel forwarded the disconnect. The provider call was cancelled. |
-| `outcome: "done"`, full-length `deltas` and `outputTokens` | The function never learned the client left. Stop saved the reader's time, not the tokens. |
+| `aborted` went up; `last.ms` is near the moment Stop was pressed; `cancels.matched` went up | The server cancelled the model call when Stop was pressed. |
+| `done` went up with a full-length `deltas` | The model call ran to the end. Stop only saved the reader's time. |
+| `instance` differs between two readings | A different server instance answered. The counters are per instance, so the two readings cannot be compared. |
 
 ## 7 · How to run and verify
 
@@ -307,7 +333,7 @@ values are treated as "no key".
 | `npm run lint` | 0 warnings |
 | `npm test` | 344 passed in 15 files (248 before FE-06; 96 new) |
 | `npm run build` | `/api/chat` and `/underwriting` are dynamic (`ƒ`) |
-| `npm run test:e2e` | 44 checks passed: the 18 existing fold and overflow checks, plus 13 Copilot checks at each of 375px and 1280px |
+| `npm run test:e2e` | 46 checks passed: the 18 existing fold and overflow checks, plus 14 Copilot checks at each of 375px and 1280px |
 
 New tests:
 [`StreamingUnderwritingChat.test.tsx`](../src/features/ai-copilot/__tests__/StreamingUnderwritingChat.test.tsx)

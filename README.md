@@ -290,12 +290,13 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
     no invented borrowers), 4 starter prompts.
   - **Rate limit:** [`src/lib/ai/rate-limit.ts`](./src/lib/ai/rate-limit.ts) — in-memory sliding window, 10 a minute and
     100 a day per client, `429` + `Retry-After`, applied only when a paid model would be called.
-  - **Evidence:** 96 new Vitest tests (344 total) and 13 Chromium checks per width against the real
-    route. The browser run caught a scroll race that jsdom missed. On the live URL `gemini-3.5-flash-lite` (Google free tier)
-    streamed replies, Stop kept a partial reply, and a follow-up was answered in context.
-    **Not yet shown:** whether Vercel cancels the model call server-side on Stop, a Claude model, and
-    a rate limit that holds under a live burst (13 simultaneous requests all passed; it needs a shared
-    store before a paid key).
+  - **Evidence:** 96 new Vitest tests (344 total) and 14 Chromium checks per width against the real
+    route. The browser run caught a scroll race that jsdom missed. On the live URL `gemini-3.5-flash-lite`
+    (Google free tier) streamed replies and answered a follow-up in context. Stop cancelled the model
+    call on the server: `GET /api/chat` recorded `aborted` at 5,921 ms for a Stop clicked at 5,943 ms.
+    The rate limit refused the 12th request from one client with `429` and `Retry-After: 8`.
+    **Not yet shown:** a Claude model, and a rate limit that holds across server instances or many
+    addresses (it is in-memory; it needs a shared store before a paid key).
 
 ## License
 
