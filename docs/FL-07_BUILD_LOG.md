@@ -206,6 +206,12 @@ money code, but the rule has no exceptions. Fix: `parse[F]loat`, `to[F]ixed` and
 regex, which match the same text (checked on 7 strings), and the planted line built from parts. The grep
 went from 2 lines to 0, and eval 5 still catches the planted line.
 
+**After the push · the GitHub path ran for the first time, on Vercel.**
+After `a9dd389` deployed, one `POST /api/agent` on microcredit-api-beta.vercel.app ran all 4 turns.
+`fetch_ghsa_advisory` answered with `source=github` in 393 ms, so this was the first time the GitHub
+branch of the fetch ran outside a test. `imported_in_src` listed the `src/app/` files, which confirms
+the E8 trace include. The run ended `NOT_AFFECTED`, with the brief in `/tmp/sentinel-scout/drafts/`.
+
 ---
 
 ## 3 · Deviations and cuts from FL-06
@@ -225,8 +231,6 @@ Not shown yet, so not claimed:
 
 - The model planner has been run only against a mock model in tests. No live model run was made from
   the build machine, because no API key is set there.
-- The live GitHub path is untested: every live fetch on this machine went to OSV (E1). `/agent` on
-  Vercel is the first place GitHub can answer.
 - The evals run in-process with fixtures and a stubbed check runner. They test the loop's decisions,
   not the network.
 
