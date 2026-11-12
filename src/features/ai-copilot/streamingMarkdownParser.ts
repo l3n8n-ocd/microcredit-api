@@ -30,11 +30,24 @@ export type Block =
   | { readonly type: 'heading'; readonly level: number; readonly inline: readonly Inline[] }
   | { readonly type: 'list'; readonly ordered: boolean; readonly items: readonly (readonly Inline[])[] }
   | { readonly type: 'code'; readonly lang: string; readonly code: string; readonly open: boolean }
+  | { readonly type: 'table'; readonly header: readonly (readonly Inline[])[]; readonly rows: readonly (readonly (readonly Inline[])[])[] }
 
 const FENCE_OPEN = /^\s*```\s*([\w+-]*)\s*$/
 const FENCE_CLOSE = /^\s*```\s*$/
 const HEADING = /^(#{1,4})\s+(.*)$/
 const LIST_ITEM = /^\s*([-*]|\d+\.)\s+(.*)$/
+const TABLE_ROW = /^\s*\|.*\|\s*$/
+const TABLE_RULE = /^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/
+
+/** GFM cells: split on `|` that is not escaped as `\|`, then unescape. */
+function tableCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim().replaceAll('\\|', '|'))
+}
 /** A last line that so far is only the beginning of a block marker. */
 const PARTIAL_BLOCK_MARKER = /^\s*(`{1,2}|#{1,4}|[-*]|\d+\.?)$/
 const PARTIAL_FENCE_CLOSE = /^\s*`{1,2}$/
@@ -178,6 +191,19 @@ export function parseStreamingMarkdown(source: string, streaming: boolean): Bloc
         inline: parseInline(heading[2] ?? '', streaming && index === lastLine),
       })
       index += 1
+      continue
+    }
+
+    // A GFM table: a header row, then a |---| rule, then rows. Only once the rule has arrived.
+    if (TABLE_ROW.test(line) && TABLE_RULE.test(lines[index + 1] ?? '')) {
+      const header = tableCells(line).map((cell) => parseInline(cell, false))
+      const rows: Inline[][][] = []
+      index += 2
+      while (index < lines.length && TABLE_ROW.test(lines[index] ?? '')) {
+        rows.push(tableCells(lines[index] ?? '').map((cell) => parseInline(cell, streaming && index === lastLine)))
+        index += 1
+      }
+      blocks.push({ type: 'table', header, rows })
       continue
     }
 

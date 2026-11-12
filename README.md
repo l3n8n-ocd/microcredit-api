@@ -151,7 +151,9 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (388 tests)                |
+| `npm test`          | Run the Vitest suite once (409 tests)                |
+| `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
+| `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -331,7 +333,19 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **A full system prompt, 6 eval cases written before the build** (injection and secret-leak cases
     block shipping), and three guardrail tiers mapped to OpenAI's guide. The red lines hold because
     the agent has no tool for them.
-  - **Status: design only.** Nothing is built yet; unverified items are listed in Section 7.
+  - **Status: built in FL-07** (next entry). The spec is kept as written; what changed is in the FL-07 log.
+- **FL-07 · Build the Agent (Week 5 General AI Fluency):** [`docs/FL-07_BUILD_LOG.md`](./docs/FL-07_BUILD_LOG.md) · [`agents/sentinel-scout/run-agent.mjs`](./agents/sentinel-scout/run-agent.mjs) · [`docs/drafts/latest-triage-brief.md`](./docs/drafts/latest-triage-brief.md) · live runner: [`/agent`](https://microcredit-api-beta.vercel.app/agent)
+  - **One command:** `npm run agent:run` starts the MCP server and calls `fetch_ghsa_advisory` →
+    `scan_local_repo_exposure` → `audit_centavos_and_idempotency` → `write_sanitized_triage_brief`
+    as JSON-RPC `tools/call`s over stdio, then writes the brief and its SHA-256. No step is manual.
+  - **Gates in code, not only the prompt:** the server refuses call 5 of a triage, advisory text is
+    wrapped as untrusted data, and the writer refuses a brief with a JWT, bearer token, RFC 1918 IP or
+    `x-maya-sig` header in it.
+  - **`npm run agent:eval`: 6/6** FL-06 cases, both blockers included, and each of cases 2–5 was
+    shown to fail under a deliberate break. The build breaks E1–E10 and 8 deviations from the spec are in the log.
+  - **Recording:** [`docs/assets/curated/fl-07-agent-run.webm`](./docs/assets/curated/fl-07-agent-run.webm),
+    one unedited run on `/agent`. Locally the fetch is answered by OSV.dev because GitHub's advisory API
+    is blocked from the build machine; the model planner is tested against a mock model only.
 
 ## License
 

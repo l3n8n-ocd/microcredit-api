@@ -60,3 +60,8 @@ lerna-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# SentinelScout (FL-07): advisory cache, and per-run drafts. Only the latest brief is committed.
+.sentinel-cache/
+docs/drafts/*
+!docs/drafts/latest-triage-brief.md

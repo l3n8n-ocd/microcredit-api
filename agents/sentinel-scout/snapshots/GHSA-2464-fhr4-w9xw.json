@@ -1,0 +1,27 @@
+{
+  "cached_at": "2026-11-12T20:04:10.416Z",
+  "advisories": [
+    {
+      "ghsa_id": "GHSA-2464-fhr4-w9xw",
+      "cve_id": null,
+      "severity": "critical",
+      "cvss": {
+        "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:H/VI:H/VA:H/SC:H/SI:H/SA:H",
+        "score": null
+      },
+      "affected": [
+        {
+          "package": "next",
+          "vulnerable_range": ">=10.0.0 <15.5.28||>=16.0.0 <16.4.1",
+          "first_patched": [
+            "15.5.28",
+            "16.4.1"
+          ]
+        }
+      ],
+      "summary": "<untrusted_external_advisory_data>Next.js: Unauthenticated Remote Code Execution in Image Optimization API when SVG files are used\n\n## Impact\n\nA memory-related vulnerability has been discovered in an upstream library used for Image Optimization can lead to possible remote code execution (RCE) when Next.js runs on glibc-based Linux.\n\n## Workaround\n\nEnsure the version of `sharp` used by Next.js is greater than or equal to `0.35.5`. Fresh installs automatically get a fixed version of `sharp`.\nUpgrading Next.js to the patched versions will ensure package managers automatically provide a fixed version of `sharp` to Next.js.</untrusted_external_advisory_data>",
+      "injection_suspected": false,
+      "url": "https://github.com/advisories/GHSA-2464-fhr4-w9xw"
+    }
+  ]
+}

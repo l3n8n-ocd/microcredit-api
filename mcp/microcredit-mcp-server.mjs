@@ -4,57 +4,50 @@
  *
  * Standards-compliant JSON-RPC 2.0 over newline-delimited stdio (the MCP stdio transport).
  * Exposes all three MCP primitives, grounded in real repo files:
- *   Tools      audit_centavos_and_idempotency, verify_fl04_advisory_redaction, query_live_ledger_health
+ *   Tools      FL-07 SentinelScout: fetch_ghsa_advisory, scan_local_repo_exposure,
+ *              audit_centavos_and_idempotency, write_sanitized_triage_brief
+ *              (code in src/lib/sentinel-scout/tools.ts, shared with the CLI and /api/agent)
+ *              FL-05: verify_fl04_advisory_redaction, query_live_ledger_health
  *   Resources  microcredit://spec/invariants, microcredit://workflows/fl04-runs
  *   Prompts    fl04-security-advisory-audit
  *
- * Zero dependencies. Protocol messages go to stdout ONLY; diagnostics go to stderr.
- * Start:  node mcp/microcredit-mcp-server.mjs   (a client speaks JSON-RPC on stdin/stdout)
+ * Protocol messages go to stdout ONLY, one JSON object per line; diagnostics go to stderr.
+ * A stray console.log would corrupt the stream, so this file never calls it.
+ * Needs Node >= 22.18: the SentinelScout tools are TypeScript, run through Node's type stripping.
+ * Start:  node --use-env-proxy mcp/microcredit-mcp-server.mjs   (a client speaks JSON-RPC on stdin/stdout)
  */
 import { createInterface } from 'node:readline'
-import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 
+import { auditCentavosAndIdempotency, createToolbox, nodeCheckRunner, TOOL_SCHEMAS } from '../src/lib/sentinel-scout/tools.ts'
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PROTOCOL_VERSION = '2024-11-05'
-const SERVER_INFO = { name: 'microcredit-mcp', version: '1.0.0' }
+const SERVER_INFO = { name: 'microcredit-mcp', version: '1.1.0' }
+
+// ─── SentinelScout (FL-07): one toolbox per server process ──────────────────
+// The toolbox checks triage_id, counts calls per triage, and refuses call 5.
+const SENTINEL_CTX = {
+  root: ROOT,
+  fetch: globalThis.fetch,
+  now: () => new Date(),
+  draftsDir: join(ROOT, 'docs/drafts'),
+  cacheDir: join(ROOT, '.sentinel-cache/ghsa'),
+  snapshotDir: join(ROOT, 'agents/sentinel-scout/snapshots'),
+  runChecks: nodeCheckRunner,
+}
+const sentinel = createToolbox(SENTINEL_CTX)
+const sentinelTool = (name) => ({
+  name,
+  description: TOOL_SCHEMAS[name].description,
+  inputSchema: TOOL_SCHEMAS[name].inputSchema,
+  run: (a) => sentinel.call(name, a),
+})
 
 // ─── Tool implementations (real work against local files / live telemetry) ───
-function walk(dir, out = []) {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry)
-    if (statSync(full).isDirectory()) walk(full, out)
-    else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(full)
-  }
-  return out
-}
 
-function auditCentavosAndIdempotency({ dir = 'src/features' } = {}) {
-  const base = join(ROOT, dir)
-  const files = walk(base)
-  // CLAUDE.md §11 rule 2 money grep, minus comment lines.
-  const FLOAT = /parseFloat|toFixed|\*\s?100\b|\/\s?100\b|as Centavos/
-  const violations = []
-  for (const f of files) {
-    readFileSync(f, 'utf8').split('\n').forEach((line, i) => {
-      const trimmed = line.trim()
-      if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('/*')) return
-      if (FLOAT.test(line)) violations.push(`${f.replace(ROOT + '/', '')}:${i + 1}: ${trimmed.slice(0, 80)}`)
-    })
-  }
-  const types = readFileSync(join(ROOT, 'src/features/disbursement/types.ts'), 'utf8')
-  const idempotency = /'Idempotency-Key'/.test(types)
-  const ifMatch = /'If-Match'/.test(types)
-  return {
-    files_scanned: files.length,
-    float_currency_violations: violations.length,
-    violations,
-    idempotency_key_header_required: idempotency,
-    if_match_header_required: ifMatch,
-    verdict: violations.length === 0 && idempotency && ifMatch ? 'PASS' : 'FAIL',
-  }
-}
 
 const LEAK_PATTERNS = [
   ['JWT', /eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{4,}/],
@@ -136,12 +129,15 @@ async function queryLiveLedgerHealth({ url = 'http://localhost:3000/api/health' 
 }
 
 const TOOLS = [
+  sentinelTool('fetch_ghsa_advisory'),
+  sentinelTool('scan_local_repo_exposure'),
   {
-    name: 'audit_centavos_and_idempotency',
-    description: 'Scan local TypeScript in src/features/ for floating-point currency math and confirm the Idempotency-Key + If-Match headers are required.',
-    inputSchema: { type: 'object', properties: { dir: { type: 'string', description: 'directory to scan, default src/features' } } },
-    run: async (a) => auditCentavosAndIdempotency(a),
+    ...sentinelTool('audit_centavos_and_idempotency'),
+    // FL-05 called this tool with only { dir }. Without a triage_id it still runs, outside any triage budget.
+    run: (a) => (typeof a.triage_id === 'string' ? sentinel.call('audit_centavos_and_idempotency', a) : auditCentavosAndIdempotency(SENTINEL_CTX, a)),
+    inputSchema: { ...TOOL_SCHEMAS.audit_centavos_and_idempotency.inputSchema, required: [] },
   },
+  sentinelTool('write_sanitized_triage_brief'),
   {
     name: 'verify_fl04_advisory_redaction',
     description: 'Run the FL-04 redaction + CVSS v3.1 critic against a target advisory file on disk; returns structured pass/fail.',
@@ -221,8 +217,9 @@ async function handle(msg) {
       const tool = TOOLS.find((t) => t.name === params.name)
       if (!tool) return err(id, -32602, `unknown tool: ${params.name}`)
       try {
+        process.stderr.write(`[microcredit-mcp] tools/call ${tool.name}\n`)
         const result = await tool.run(params.arguments ?? {})
-        return ok(id, { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], isError: result.verdict === 'FAIL' })
+        return ok(id, { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], isError: result.ok === false || result.verdict === 'FAIL' })
       } catch (error) {
         return ok(id, { content: [{ type: 'text', text: `tool error: ${error instanceof Error ? error.message : 'error'}` }], isError: true })
       }

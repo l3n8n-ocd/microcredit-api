@@ -197,6 +197,19 @@ describe('parseStreamingMarkdown — never shows half a marker', () => {
     ])
   })
 
+  it('parses a GFM table, keeping escaped pipes inside a cell', () => {
+    const md = ['| Package | Range |', '| --- | --- |', '| `next` | `>=10.0.0 <15.5.28\\|\\|>=16.0.0 <16.4.1` |'].join('\n')
+    expect(parseStreamingMarkdown(md, false)).toEqual([
+      {
+        type: 'table',
+        header: [[{ type: 'text', text: 'Package' }], [{ type: 'text', text: 'Range' }]],
+        rows: [[[{ type: 'code', text: 'next' }], [{ type: 'code', text: '>=10.0.0 <15.5.28||>=16.0.0 <16.4.1' }]]],
+      },
+    ])
+    // Until the |---| rule arrives, a lone header row is just text.
+    expect(parseStreamingMarkdown('| Package | Range |', true)[0]?.type).toBe('paragraph')
+  })
+
   it('parses headings and ordered lists', () => {
     expect(parseStreamingMarkdown('### Nena\n\n1. first\n2. second', false)).toEqual([
       { type: 'heading', level: 3, inline: [{ type: 'text', text: 'Nena' }] },

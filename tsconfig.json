@@ -44,6 +44,7 @@
     "next-env.d.ts",
     "src",
     "playground",
+    "agents",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],

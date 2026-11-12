@@ -2,12 +2,20 @@
   "mcpServers": {
     "microcredit-mcp": {
       "command": "node",
-      "args": ["mcp/microcredit-mcp-server.mjs"],
-      "description": "Project MCP server: 3 tools, 2 resources, 1 prompt grounded in this repo."
+      "args": [
+        "--use-env-proxy",
+        "--no-warnings",
+        "mcp/microcredit-mcp-server.mjs"
+      ],
+      "description": "Project MCP server: 6 tools (4 SentinelScout, 2 from FL-05), 2 resources, 1 prompt. Needs Node >= 22.18."
     },
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "."
+      ],
       "description": "Official read-only filesystem connector scoped to the repo root."
     }
   }

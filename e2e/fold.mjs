@@ -29,7 +29,7 @@ import { chromium } from 'playwright'
 const PORT = 4173
 const BASE = `http://localhost:${PORT}`
 const BUTTONS = [/^Disburse$/, /^Simulate double-click \/ network retry$/]
-const ROUTES = ['/', '/underwriting', '/ledger', '/advisories', '/health', '/portfolio', '/playground']
+const ROUTES = ['/', '/underwriting', '/ledger', '/advisories', '/health', '/portfolio', '/playground', '/agent']
 const FORCE_FALLBACK = `:root{--font-plus-jakarta:'DejaVu Sans';--font-jetbrains:'DejaVu Sans Mono'}`
 
 async function waitForServer(timeoutMs = 60_000) {

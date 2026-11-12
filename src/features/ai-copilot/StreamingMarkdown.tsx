@@ -67,6 +67,33 @@ function BlockView({ block }: { readonly block: Block }) {
         </Tag>
       )
     }
+    case 'table':
+      return (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-300">
+                {block.header.map((cell, index) => (
+                  <th key={index} scope="col" className="py-1 pr-4 font-semibold">
+                    <InlineNodes nodes={cell} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {block.rows.map((row, rowIndex) => (
+                <tr key={rowIndex} className="border-b border-slate-200">
+                  {row.map((cell, index) => (
+                    <td key={index} className="py-1 pr-4 align-top">
+                      <InlineNodes nodes={cell} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
     case 'paragraph':
       return (
         <p>
