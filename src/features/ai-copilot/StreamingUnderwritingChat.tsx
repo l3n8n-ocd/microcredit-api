@@ -74,7 +74,7 @@ export function StreamingUnderwritingChat(props: StreamingUnderwritingChatProps)
     () => false,
   )
   const stored = useMemo(() => (hydrated ? loadConversation() : []), [hydrated])
-  return <ChatSession key={hydrated ? 'browser' : 'server'} {...props} initialMessages={stored} />
+  return <ChatSession key={hydrated ? 'browser' : 'server'} {...props} initialMessages={stored} persist={hydrated} />
 }
 
 /**
@@ -192,9 +192,16 @@ function StarterChips({ prompts, disabled, onPick, layout }: StarterChipsProps) 
 
 interface ChatSessionProps extends StreamingUnderwritingChatProps {
   readonly initialMessages: readonly ChatMessage[]
+  /**
+   * False for the placeholder session rendered on the server and during
+   * hydration. It starts empty because it cannot see localStorage, so it must
+   * not save: saving its empty list would delete the stored conversation
+   * before the browser session loads it.
+   */
+  readonly persist: boolean
 }
 
-function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, initialMessages }: ChatSessionProps) {
+function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, initialMessages, persist }: ChatSessionProps) {
   const [state, dispatch] = useReducer(chatReducer, initialMessages, createInitialState)
   const [draft, setDraft] = useState('')
   /** Tip 1: drives the "Jump to latest" pill. Set from scroll events only. */
@@ -260,8 +267,8 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
 
   /** Save at rest (reply finished, stopped, failed or cleared), not on every token. */
   useEffect(() => {
-    if (!busy) saveConversation(state.messages)
-  }, [busy, state.messages])
+    if (persist && !busy) saveConversation(state.messages)
+  }, [persist, busy, state.messages])
 
   /** Leaving the page cancels the request in flight. */
   useEffect(
