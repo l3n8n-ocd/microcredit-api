@@ -311,6 +311,16 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
     corrections to the brief and one focus-ring gap in the generated shadcn file.
   - **Evidence:** [40 keyboard-only tests](./playground/__tests__/playground.test.tsx) with `user-event`
     (384 total), one test per gap, 16 mutation checks, and 11 keyboard checks in Chromium on the built app.
+- **Explain It Like You Built It (Week 5/6 General AI Fluency):** [`docs/EXPLAIN_IT_LIKE_YOU_BUILT_IT.md`](./docs/EXPLAIN_IT_LIKE_YOU_BUILT_IT.md)
+  - **The piece:** how [`src/app/page.tsx`](./src/app/page.tsx) hands off to the `'use client'` island in
+    [`src/App.tsx`](./src/App.tsx), and how `Idempotency-Key` and `If-Match` stop a double payout in
+    [`disbursementServer.ts`](./src/features/disbursement/disbursementServer.ts).
+  - **A 297-word plain-words explanation** and verbatim, line-numbered code with a plain-English note on each part.
+  - **An honest Tutor Mode log:** every quiz answer as picked, right or wrong, with the correction. One
+    point is still open and says so.
+  - **Two real bugs found and fixed:** a hydration mismatch on `/` and `/underwriting` (React #418, a
+    random key made during render), and the chat history wipe it had been hiding. Each fix has a test
+    that fails when it is reverted.
 
 ## License
 
