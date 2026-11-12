@@ -59,7 +59,13 @@ try {
     { name: 'laptop', width: 1280, height: 800 },
   ]) {
     const page = await browser.newPage({ viewport: { width: viewport.width, height: viewport.height } })
+    // A hydration mismatch (React #418) surfaces as an uncaught page error.
+    const pageErrors = []
+    page.on('pageerror', (error) => pageErrors.push(error.message.slice(0, 120)))
     await page.goto(BASE, { waitUntil: 'networkidle' })
+    const hydrated = pageErrors.length === 0
+    process.stdout.write(`${hydrated ? '✓' : '✗'} ${viewport.name}: / hydrates with no page error${hydrated ? '' : ` (${pageErrors.join(' | ')})`}\n`)
+    if (!hydrated) failures.push(`${viewport.name}: page error on / (${pageErrors.join(' | ')})`)
     await page.addStyleTag({ content: FORCE_FALLBACK })
     await page.evaluate(() => document.fonts.ready)
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useId, useState, type FormEvent } from 'react'
+import { PENDING_IDEMPOTENCY_KEY, useIdempotencyKey } from '../../hooks/useIdempotencyKey.ts'
 import { formatPHP, parsePesosToCentavos, sumCentavos, type Centavos } from '../../utils/index.ts'
 import {
   formatIfMatch,
@@ -56,11 +57,12 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
   const [amount, setAmount] = useState('')
   const [errors, setErrors] = useState<RepayErrors>({})
   const [summary, setSummary] = useState<string | null>(null)
-  const [repayKey, setRepayKey] = useState(createKey)
+  // Both keys are created in the browser only, so the server HTML and the hydrated page match.
+  const [repayKey, renewRepayKey] = useIdempotencyKey(createKey)
 
   const [reverseId, setReverseId] = useState('')
   const [reverseError, setReverseError] = useState<string | null>(null)
-  const [reverseKey, setReverseKey] = useState(createKey)
+  const [reverseKey, renewReverseKey] = useIdempotencyKey(createKey)
 
   const repayable = loans.filter(isRepayable)
   const loan = repayable.find((candidate) => candidate.id === loanId) ?? null
@@ -92,6 +94,7 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
 
   async function handleRepay(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
+    if (repayKey === PENDING_IDEMPOTENCY_KEY) return
     const valid = validate()
     if (valid === null) return
     const response = await send({
@@ -103,13 +106,14 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
     if (response.kind === 'APPLIED') {
       // The intent is done: the next repayment is a new intent with a new key.
       setAmount('')
-      setRepayKey(createKey())
+      renewRepayKey()
       if (response.loan.status === 'SETTLED') setLoanId('')
     }
   }
 
   async function handleReverse(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
+    if (reverseKey === PENDING_IDEMPOTENCY_KEY) return
     const entry = reversible.find((candidate) => candidate.id === reverseId)
     const target = entry === undefined ? undefined : loans.find((candidate) => candidate.id === entry.loanId)
     if (entry === undefined || target === undefined) {
@@ -126,7 +130,7 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
     onAnnounce(describeCommand(target.id, response))
     if (response.kind === 'APPLIED') {
       setReverseId('')
-      setReverseKey(createKey())
+      renewReverseKey()
     }
   }
 
@@ -177,7 +181,7 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
             value={loanId}
             onChange={(event) => {
               setLoanId(event.target.value)
-              setRepayKey(createKey())
+              renewRepayKey()
             }}
             aria-invalid={errors.loanId === undefined ? 'false' : 'true'}
             aria-describedby={describedBy('loanId', `${id}-loanId-hint`)}
@@ -213,7 +217,7 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
             value={amount}
             onChange={(event) => {
               setAmount(event.target.value)
-              setRepayKey(createKey())
+              renewRepayKey()
             }}
             aria-invalid={errors.amount === undefined ? 'false' : 'true'}
             aria-describedby={describedBy('amount', `${id}-amount-hint`)}
@@ -264,7 +268,7 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
             value={reverseId}
             onChange={(event) => {
               setReverseId(event.target.value)
-              setReverseKey(createKey())
+              renewReverseKey()
             }}
             aria-invalid={reverseError === null ? 'false' : 'true'}
             aria-describedby={reverseError === null ? `${id}-reverse-hint` : `${id}-reverse-hint ${id}-reverse-error`}

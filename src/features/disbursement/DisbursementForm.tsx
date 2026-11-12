@@ -1,6 +1,7 @@
 'use client'
 
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { PENDING_IDEMPOTENCY_KEY, useIdempotencyKey } from '../../hooks/useIdempotencyKey.ts'
 import { createIdempotencyKey, formatPHP, parsePesosToCentavos } from '../../utils/index.ts'
 import { formatIfMatch, type DisbursementServer } from './disbursementServer.ts'
 import { buildDisbursementJournal, journalTotals } from './ledger.ts'
@@ -137,7 +138,8 @@ export function DisbursementForm({
   const [values, setValues] = useState<FormValues>(initialValues)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [attempted, setAttempted] = useState(false)
-  const [idempotencyKey, setIdempotencyKey] = useState(createKey)
+  // Created in the browser only, so the server HTML and the hydrated page match.
+  const [idempotencyKey, renewIdempotencyKey] = useIdempotencyKey(createKey)
   const [inFlight, setInFlight] = useState(false)
   const inFlightRef = useRef(false)
   const [loans, setLoans] = useState<readonly LoanState[]>(() => server.listLoans())
@@ -164,7 +166,7 @@ export function DisbursementForm({
       setValues(next)
       // A changed payload is a new intent, so it gets a new key. Retries of the
       // same intent (same values) keep the old one.
-      setIdempotencyKey(createKey())
+      renewIdempotencyKey()
       if (attempted) {
         const result = validateDisbursement(next, loans)
         setErrors(result.ok ? {} : result.errors)
@@ -199,7 +201,7 @@ export function DisbursementForm({
       if (created) {
         // The intent is fulfilled: clear the loan so the next payout is a new intent.
         setValues((previous) => ({ ...previous, loanId: '' }))
-        setIdempotencyKey(createKey())
+        renewIdempotencyKey()
         setAttempted(false)
         setErrors({})
       }
@@ -226,13 +228,13 @@ export function DisbursementForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
-    if (inFlightRef.current) return
+    if (inFlightRef.current || idempotencyKey === PENDING_IDEMPOTENCY_KEY) return
     const value = validateForSubmit()
     if (value !== null) await send([buildRequest(value, idempotencyKey)], 'Disburse')
   }
 
   async function handleSimulate(): Promise<void> {
-    if (inFlightRef.current) return
+    if (inFlightRef.current || idempotencyKey === PENDING_IDEMPOTENCY_KEY) return
     const value = validateForSubmit()
     if (value === null) return
     const first = buildRequest(value, idempotencyKey)
@@ -251,7 +253,7 @@ export function DisbursementForm({
     setValues(initialValues)
     setErrors({})
     setAttempted(false)
-    setIdempotencyKey(createKey())
+    renewIdempotencyKey()
   }
 
   function fieldProps(field: FieldName) {

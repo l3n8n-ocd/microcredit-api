@@ -151,7 +151,7 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (385 tests)                |
+| `npm test`          | Run the Vitest suite once (388 tests)                |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow

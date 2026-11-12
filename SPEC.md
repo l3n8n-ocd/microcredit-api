@@ -35,7 +35,7 @@ Server Components by default; `'use client'` only on interactive leaves.
 
 - **Domain stays framework-free.** All business logic lives in `src/features/` (`disbursement`,
   `scoring`, `health`) and `src/utils/`, imported by both Server and Client components. The suite is
-  385 tests: 248 on the domain and UI, 97 on the FE-06 chat, its rate limiter and its env handling
+  388 tests: 251 on the domain and UI, 97 on the FE-06 chat, its rate limiter and its env handling
   (`src/features/ai-copilot/`, `src/lib/ai/`, `src/utils/env.ts`), and 40 keyboard tests on the
   FE-03 / FE-05 components in `playground/`.
   The Next.js migration added routing and a shell; it changed no domain logic and removed no test.
@@ -88,7 +88,7 @@ same functions, and FE-07 tools will replace that snapshot (`CLAUDE.md` §9.2 ru
 
 ## Testing
 
-- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 385 tests),
+- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 388 tests),
   `npm run build` (next build), `npm run test:e2e` (Playwright: above-the-fold on `/` under the
   worst-case fallback font, all 5 routes at 375px and 1280px with zero horizontal overflow, and 14 AI
   Copilot checks per width against the real `/api/chat`: token-by-token streaming, Stop, server-confirmed
