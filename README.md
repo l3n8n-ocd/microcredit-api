@@ -321,6 +321,17 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **Two real bugs found and fixed:** a hydration mismatch on `/` and `/underwriting` (React #418, a
     random key made during render), and the chat history wipe it had been hiding. Each fix has a test
     that fails when it is reverted.
+- **FL-06 · Design Your Personal Agent (Week 5 General AI Fluency):** [`docs/FL-06_PERSONAL_AGENT_SPEC.md`](./docs/FL-06_PERSONAL_AGENT_SPEC.md)
+  - **SentinelScout, one job:** given a GHSA ID, say whether `microcredit-api` is exposed, re-check
+    the `Σ debits === Σ credits` and `Idempotency-Key` / `If-Match` invariants, and save a redacted
+    draft brief for my sign-off. 3–4 times a week; a 10-hour build table.
+  - **4 typed tools** added to [`mcp/microcredit-mcp-server.mjs`](./mcp/microcredit-mcp-server.mjs), each with a
+    $0 data source (GitHub advisories, OSV.dev, the local lockfile and `src/`), a fallback, and errors
+    that tell the model what to do next. The 4-call limit is enforced by the server, not only the prompt.
+  - **A full system prompt, 6 eval cases written before the build** (injection and secret-leak cases
+    block shipping), and three guardrail tiers mapped to OpenAI's guide. The red lines hold because
+    the agent has no tool for them.
+  - **Status: design only.** Nothing is built yet; unverified items are listed in Section 7.
 
 ## License
 
