@@ -28,14 +28,16 @@ Server Components by default; `'use client'` only on interactive leaves.
 | `/ledger` | `src/app/ledger/page.tsx` | Server Component | Immutable double-entry journal (`Σ debits === Σ credits`), repayment split preview, reversal audit explainer |
 | `/advisories` | `src/app/advisories/page.tsx` | Server Component | Concurrency + security guardrail monitor (`Idempotency-Key` replay, `409` version checks, sanitized advisory format) |
 | `/health` | `src/app/health/page.tsx` + `src/app/api/health/route.ts` | Async Server Component fetches the route handler | Live system / env / ledger-invariant health check |
+| `/playground` | `src/app/playground/page.tsx` | Static Server Component + client islands from [`playground/`](./playground/) and `src/features/playground/` | ✅ FE-03 / FE-05 coursework, not a product screen: hand-built APG modal, tabs and disclosure next to their shadcn/ui equivalents. Write-up: [`NOTES.md`](./NOTES.md) |
 | `POST` / `DELETE` / `GET /api/chat` | `src/app/api/chat/route.ts` | Route handler, Node runtime, Server-Sent Events; `DELETE` cancels one reply by request ID; `GET` returns counters | ✅ FE-06 streaming endpoint: AI SDK `streamText` when a server-only key is set, local rule engine otherwise |
 
 ## Architecture notes
 
 - **Domain stays framework-free.** All business logic lives in `src/features/` (`disbursement`,
   `scoring`, `health`) and `src/utils/`, imported by both Server and Client components. The suite is
-  344 tests: 248 on the domain and UI, 96 on the FE-06 chat, its rate limiter and its env handling
-  (`src/features/ai-copilot/`, `src/lib/ai/`, `src/utils/env.ts`).
+  384 tests: 248 on the domain and UI, 96 on the FE-06 chat, its rate limiter and its env handling
+  (`src/features/ai-copilot/`, `src/lib/ai/`, `src/utils/env.ts`), and 40 keyboard tests on the
+  FE-03 / FE-05 components in `playground/`.
   The Next.js migration added routing and a shell; it changed no domain logic and removed no test.
 - **Server/client boundary.** Server code imports the *pure* modules directly
   (`ledger.ts`, `scoreEngine.ts`), never the feature barrels, which also re-export `'use client'`
@@ -86,7 +88,7 @@ same functions, and FE-07 tools will replace that snapshot (`CLAUDE.md` §9.2 ru
 
 ## Testing
 
-- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 344 tests),
+- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 384 tests),
   `npm run build` (next build), `npm run test:e2e` (Playwright: above-the-fold on `/` under the
   worst-case fallback font, all 5 routes at 375px and 1280px with zero horizontal overflow, and 14 AI
   Copilot checks per width against the real `/api/chat`: token-by-token streaming, Stop, server-confirmed

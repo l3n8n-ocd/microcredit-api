@@ -52,6 +52,14 @@
     },
     {
       "files": [
+        "src/components/ui/**/*.tsx"
+      ],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    },
+    {
+      "files": [
         "src/app/api/**/*.ts"
       ],
       "rules": {

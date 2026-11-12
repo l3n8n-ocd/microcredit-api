@@ -9,6 +9,10 @@
  *    real `/api/chat` route: tokens arrive one by one, Stop aborts the request,
  *    the server confirms it cancelled the reply, the partial reply is kept, a follow-up sends straight away, scrolling up
  *    releases auto-scroll, and the conversation survives a reload.
+ * 4. `/playground` (FE-03 / FE-05), keyboard only, with the browser's real tab
+ *    order: both dialogs (hand-built and shadcn/ui) trap Tab and Shift+Tab,
+ *    close on Escape and return focus to their trigger; both tab sets wrap with
+ *    the arrow keys and jump with Home / End; the disclosure toggles.
  *
  * Fonts: the app self-hosts Plus Jakarta Sans / JetBrains Mono, but a low-end
  * Android phone paints the fallback first, and the fallback is TALLER. This check
@@ -25,7 +29,7 @@ import { chromium } from 'playwright'
 const PORT = 4173
 const BASE = `http://localhost:${PORT}`
 const BUTTONS = [/^Disburse$/, /^Simulate double-click \/ network retry$/]
-const ROUTES = ['/', '/underwriting', '/ledger', '/advisories', '/health', '/portfolio']
+const ROUTES = ['/', '/underwriting', '/ledger', '/advisories', '/health', '/portfolio', '/playground']
 const FORCE_FALLBACK = `:root{--font-plus-jakarta:'DejaVu Sans';--font-jetbrains:'DejaVu Sans Mono'}`
 
 async function waitForServer(timeoutMs = 60_000) {
@@ -190,6 +194,94 @@ try {
     await chat.getByRole('button', { name: 'Clear conversation' }).click()
     const stored = await page.evaluate(() => window.localStorage.getItem('microcredit_ai_copilot_v1'))
     check((await chat.locator('[data-role]').count()) === 0 && stored === null, 'Clear conversation empties the chat and the storage key')
+    await page.close()
+  }
+
+  // 4. /playground: keyboard only. No clicks from here on.
+  {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
+    const check = (ok, label) => {
+      process.stdout.write(`${ok ? '✓' : '✗'} playground: ${label}\n`)
+      if (!ok) failures.push(`playground: ${label}`)
+    }
+    await page.goto(`${BASE}/playground`, { waitUntil: 'networkidle' })
+    const focusInDialog = () =>
+      page.evaluate(() => document.querySelector('[role="dialog"]')?.contains(document.activeElement) ?? false)
+
+    for (const variant of ['hand-built', 'shadcn/ui']) {
+      const trigger = page.getByRole('button', { name: `Review cap override (${variant})` })
+      await trigger.focus()
+      await page.keyboard.press('Enter')
+      await page.getByRole('dialog').waitFor()
+      check(await focusInDialog(), `${variant} dialog: Enter opens it and focus moves inside`)
+
+      let stayedInside = true
+      for (let press = 0; press < 8; press += 1) {
+        await page.keyboard.press('Tab')
+        stayedInside = stayedInside && (await focusInDialog())
+      }
+      for (let press = 0; press < 8; press += 1) {
+        await page.keyboard.press('Shift+Tab')
+        stayedInside = stayedInside && (await focusInDialog())
+      }
+      check(stayedInside, `${variant} dialog: 8 × Tab and 8 × Shift+Tab never leave it`)
+
+      await page.keyboard.press('Escape')
+      await page.getByRole('dialog').waitFor({ state: 'detached' })
+      check(
+        await trigger.evaluate((element) => element === document.activeElement),
+        `${variant} dialog: Escape closes it and focus is back on its trigger`,
+      )
+    }
+
+    for (const variant of ['hand-built', 'shadcn/ui']) {
+      const tablist = page.getByRole('tablist', { name: `Loan lifecycle and ledger (${variant})` })
+      await tablist.getByRole('tab', { name: 'Lifecycle' }).focus()
+      // Radix moves focus inside a setTimeout, so wait for each key to land
+      // before sending the next one, as a person's keystrokes would.
+      const steps = [
+        ['ArrowLeft', 'Concurrency'],
+        ['ArrowRight', 'Lifecycle'],
+        ['End', 'Concurrency'],
+        ['Home', 'Lifecycle'],
+        ['ArrowRight', 'Ledger'],
+      ]
+      const walk = []
+      for (const [key, expected] of steps) {
+        await page.keyboard.press(key)
+        const landed = await page
+          .waitForFunction(
+            (name) => {
+              const element = document.activeElement
+              return (
+                element?.getAttribute('role') === 'tab' &&
+                element.getAttribute('aria-selected') === 'true' &&
+                (element.textContent ?? '').trim() === name
+              )
+            },
+            expected,
+            { timeout: 2000 },
+          )
+          .then(() => expected)
+          .catch(() => `(${key} did not reach ${expected})`)
+        walk.push(landed)
+      }
+      check(
+        walk.every((landed, index) => landed === steps[index]?.[1]),
+        `${variant} tabs: ← → End Home → focus and select ${walk.join(', ')}`,
+      )
+      await page.keyboard.press('Tab')
+      const landed = await page.evaluate(() => document.activeElement?.getAttribute('role') ?? '')
+      check(landed === 'tabpanel', `${variant} tabs: Tab goes from the selected tab to its panel (landed on ${landed})`)
+    }
+
+    const summary = page.getByRole('button', { name: 'Why a retry cannot pay a borrower twice' })
+    await summary.focus()
+    await page.keyboard.press('Enter')
+    const opened = (await summary.getAttribute('aria-expanded')) === 'true' && (await page.getByText('422 IDEMPOTENCY_KEY_REUSED').isVisible())
+    await page.keyboard.press('Space')
+    const closed = (await summary.getAttribute('aria-expanded')) === 'false' && !(await page.getByText('422 IDEMPOTENCY_KEY_REUSED').isVisible())
+    check(opened && closed, 'disclosure: Enter shows the content, Space hides it')
     await page.close()
   }
 } finally {

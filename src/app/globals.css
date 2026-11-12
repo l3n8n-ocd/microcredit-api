@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* The hand-built a11y components live outside src/ (FE-03 / FE-05). Scan them for class names too. */
+@source '../../playground';
+
 /*
  * Identity Kit tokens (docs/IDENTITY_KIT.md). The default Tailwind palette is
  * KEPT, because the interactive demo components use slate / emerald / rose /

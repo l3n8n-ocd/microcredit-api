@@ -151,7 +151,7 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (344 tests)                |
+| `npm test`          | Run the Vitest suite once (384 tests)                |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -297,6 +297,20 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
     The rate limit refused the 12th request from one client with `429` and `Retry-After: 8`.
     **Not yet shown:** a Claude model, and a rate limit that holds across server instances or many
     addresses (it is in-memory; it needs a shared store before a paid key).
+- **FE-03 / FE-05 · Accessible Component Fundamentals (Week 4 Frontend AI Engineering):** [`playground/`](./playground/) · [`NOTES.md`](./NOTES.md) · [`src/components/ui/`](./src/components/ui/) · live at [`/playground`](https://microcredit-api-beta.vercel.app/playground)
+  - **Hand-built, no component library:** [`ModalDialog.tsx`](./playground/ModalDialog.tsx) (`role="dialog"`,
+    `aria-modal`, Tab / Shift+Tab trap, Escape, focus back to the trigger), [`Tabs.tsx`](./playground/Tabs.tsx)
+    (roving `tabIndex`, ArrowRight / ArrowLeft wrap, Home / End) and [`Disclosure.tsx`](./playground/Disclosure.tsx)
+    (`aria-expanded` + `aria-controls`), each against its W3C APG pattern.
+  - **shadcn/ui next to them:** [`dialog.tsx`](./src/components/ui/dialog.tsx) and [`tabs.tsx`](./src/components/ui/tabs.tsx)
+    from the `new-york-v4` registry on `@radix-ui/react-dialog` and `@radix-ui/react-tabs`, re-tokened to the
+    Identity Kit. Both versions run the same form and panels on `/playground`.
+  - **[`NOTES.md`](./NOTES.md):** five gaps with file and line references into the Radix source: no
+    `aria-hidden` on the page behind, no portal or scroll lock, no outside-press or layer handling, no
+    `dir="rtl"` / disabled / manual tabs, no `asChild` composition or exit animation. It also records three
+    corrections to the brief and one focus-ring gap in the generated shadcn file.
+  - **Evidence:** [40 keyboard-only tests](./playground/__tests__/playground.test.tsx) with `user-event`
+    (384 total), one test per gap, 16 mutation checks, and 11 keyboard checks in Chromium on the built app.
 
 ## License
 

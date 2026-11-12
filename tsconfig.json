@@ -43,6 +43,7 @@
   "include": [
     "next-env.d.ts",
     "src",
+    "playground",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
