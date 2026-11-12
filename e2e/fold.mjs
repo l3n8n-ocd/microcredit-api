@@ -234,10 +234,23 @@ try {
 
       await page.keyboard.press('Escape')
       await page.getByRole('dialog').waitFor({ state: 'detached' })
-      check(
-        await trigger.evaluate((element) => element === document.activeElement),
-        `${variant} dialog: Escape closes it and focus is back on its trigger`,
-      )
+      // Radix returns focus in a setTimeout after the dialog unmounts
+      // (react-focus-scope), so wait for it instead of reading focus at once.
+      const focusReturned = await trigger
+        .evaluate(
+          (element) =>
+            new Promise((resolve) => {
+              const deadline = Date.now() + 2000
+              const poll = () => {
+                if (element === document.activeElement) resolve(true)
+                else if (Date.now() > deadline) resolve(false)
+                else setTimeout(poll, 10)
+              }
+              poll()
+            }),
+        )
+        .catch(() => false)
+      check(focusReturned, `${variant} dialog: Escape closes it and focus is back on its trigger`)
     }
 
     for (const variant of ['hand-built', 'shadcn/ui']) {
