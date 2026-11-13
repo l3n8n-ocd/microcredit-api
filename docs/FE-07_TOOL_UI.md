@@ -197,7 +197,11 @@ Mutation check on the card suite. Each break was put in by hand, run, then rever
   a payout here doesn't appear there.
 - **150 ms, not 200 ms**, and no height animation (CLAUDE.md §12).
 - **`monthlyUtilityOnTimeRatio` is a whole percent** (`int`), not any number.
-- **The hosted-model path is tested with a mock model**, which drives the real `streamText` and the real
-  tool `execute`. It has not run against a live model from here: there is no key in this environment.
+- **The hosted-model path:** in tests, a mock model drives the real `streamText` and the real tool `execute`.
+  On the live deployment (`d85759a`, `gemini-3.5-flash-lite`), one request with the "Run Trust Score Tool"
+  prompt went through all four frames. The model passed `requestedCentavos: 1500000` for ₱15,000.00, and
+  the result was 798 / `LOW_RISK` / `WITHIN_LIMIT`. That was one call, not a measured success rate. Its
+  summary credited `scoreEngine.ts` for the score; the system prompt now says tool scores come from
+  `src/lib/ai/tools.ts`.
 - **The proposal's `Idempotency-Key` is random**, minted once per proposal. Everything else a tool returns
   is deterministic for the same input.

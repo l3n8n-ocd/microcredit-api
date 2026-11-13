@@ -397,8 +397,8 @@ or chip) reaches `output-error` on demand.
     centavos, and a confirm widget. Every result is validated against its output schema before it is drawn.
   - **The confirm widget proves the One Claim in the copilot:** Approve sends `Idempotency-Key` + `If-Match`.
     A double-click pays once, and the replay test returns `201 REPLAYED` with 1 ledger entry.
-  - `npm test` 461/461 (32 new), `npm run test:e2e:fe07` 14/14 ([`e2e/fe07.mjs`](./e2e/fe07.mjs)). The hosted-model path
-    is tested with a mock model only; no key is set in the build environment.
+  - `npm test` 461/461 (32 new), `npm run test:e2e:fe07` 14/14 ([`e2e/fe07.mjs`](./e2e/fe07.mjs)). On the live
+    site, one hosted-model call (Gemini) streamed all four tool states: one call, not a success rate.
 
 ## License
 

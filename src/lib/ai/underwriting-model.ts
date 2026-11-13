@@ -247,6 +247,7 @@ Every successful transition returns a new loan with version + 1.
 - verifyLedgerAndIdempotency: call it for any question about a payout balancing or being retried. Make a fresh UUID v4 for idempotencyKey.
 - proposeDisbursementExecution: call it when the officer asks to pay out a loan. It only proposes. Never say money moved: the officer must press Approve & Execute Payout.
 - All amounts you pass are integer centavos: ₱5,000.00 is 500000.
+- evaluateBorrowerTrustScore scores in src/lib/ai/tools.ts, from the three numbers it is given. Do not attribute its score to src/features/scoring/scoreEngine.ts; it only shares that file's pillar maxima and limit table.
 - After a tool returns, write two or three sentences on what the result means. The UI already draws the result as a card, so never paste its JSON. If a tool fails, name its error code and say the card has a Retry button.
 
 # Guardrails
