@@ -12,10 +12,12 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react'
-import { CHAT_LIMITS, type ChatStreamEvent, type EngineInfo } from './chatProtocol.ts'
-import { chatReducer, createInitialState, isBusy, toWireHistory } from './chatReducer.ts'
-import { fetchChatTransport, type ChatTransport } from './chatTransport.ts'
-import { messageText, type ChatMessage, type StarterPrompt } from './chatTypes.ts'
+import { CHAT_TURN_RESERVE, SkeletonCard } from '../../components/ui/SkeletonCard.tsx'
+import { CHAT_LIMITS, SABOTAGE_MODES, type ChatStreamEvent, type EngineInfo, type SabotageMode } from './chatProtocol.ts'
+import { chatReducer, createInitialState, isBusy, toWireHistory, type ChatFailure } from './chatReducer.ts'
+import { ChatRequestError, fetchChatTransport, type ChatTransport } from './chatTransport.ts'
+import { failureCode, shortPrompt } from './chatFailure.ts'
+import { messageText, type ChatFailureKind, type ChatMessage, type StarterPrompt } from './chatTypes.ts'
 import { clearConversation, loadConversation, saveConversation } from './conversationStore.ts'
 import { StreamingMarkdown } from './StreamingMarkdown.tsx'
 
@@ -35,6 +37,10 @@ const PIN_THRESHOLD_PX = 48
 const INPUT_ID = 'copilot-input'
 const HINT_ID = 'copilot-input-hint'
 const ERROR_ID = 'copilot-input-error'
+const DRILL_HINT_ID = 'copilot-drill-hint'
+
+/** FE-08: a pending reply with no first token after this long shows the layout-matched skeleton. */
+export const SLOW_REPLY_MS = 1500
 
 const FOCUS_RING = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
 /** Message entry: 150 ms ease-out (cubic-bezier(0, 0, 0.2, 1)), off under prefers-reduced-motion. */
@@ -80,12 +86,14 @@ export function StreamingUnderwritingChat(props: StreamingUnderwritingChatProps)
 /**
  * Tip 3. Rendered INSIDE the assistant bubble's body container, which is the
  * same element the first token is written into. It is one text line tall
- * (`h-6`, matching `leading-6`), so swapping it for the first line of the reply
- * changes no geometry: no flicker, no jump.
+ * (`h-6`, matching `leading-6`) and block-level, so swapping it for the first
+ * line of the reply changes no geometry: no flicker, no jump.
  */
 function ThinkingIndicator() {
   return (
-    <span className="inline-flex h-6 items-center gap-2 text-slate-600" data-testid="thinking-indicator">
+    // Block-level `flex`, not `inline-flex`: an inline box sits on the text baseline and made the line ~27 px,
+    // so the first token (a 24 px line) pulled the bubble up 3 px. Measured by e2e/fe08.mjs (FE-08).
+    <span className="flex h-6 items-center gap-2 text-slate-600" data-testid="thinking-indicator">
       <span aria-hidden="true" className="inline-flex items-center gap-1">
         <span className="copilot-dot" />
         <span className="copilot-dot" />
@@ -101,12 +109,25 @@ const BADGE = 'mt-2 inline-block rounded border px-1.5 py-0.5 font-mono text-xs'
 function AssistantMessage({ message }: { readonly message: ChatMessage }) {
   const text = messageText(message)
   const pending = message.outcome === 'pending'
+  const waiting = pending && text === ''
+  /**
+   * FE-08: past 1.5 s with no token, "thinking" becomes a skeleton. Once shown,
+   * the body keeps the skeleton's height (`CHAT_TURN_RESERVE`), so the first
+   * tokens fill the reserved box instead of shrinking it.
+   */
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    if (!waiting || slow) return
+    const timer = setTimeout(() => setSlow(true), SLOW_REPLY_MS)
+    return () => clearTimeout(timer)
+  }, [waiting, slow])
+
   return (
     <>
-      {/* One container for the whole life of the reply: thinking → first token → full text. */}
-      <div className="min-h-6" data-testid="assistant-body">
-        {text === '' && pending ? (
-          <ThinkingIndicator />
+      {/* One container for the whole life of the reply: thinking → (skeleton) → first token → full text. */}
+      <div className={slow ? CHAT_TURN_RESERVE : 'min-h-6'} data-testid="assistant-body">
+        {waiting ? (
+          slow ? <SkeletonCard variant="chat-turn" /> : <ThinkingIndicator />
         ) : text === '' ? (
           <p className="text-slate-600">No reply text.</p>
         ) : (
@@ -190,6 +211,203 @@ function StarterChips({ prompts, disabled, onPick, layout }: StarterChipsProps) 
   )
 }
 
+/**
+ * FE-08 first-run state: onboarding, not apology. It says what the copilot
+ * checks, then offers four prompts that run in one click.
+ */
+function OnboardingCard({ prompts, disabled, onPick }: Omit<StarterChipsProps, 'layout'>) {
+  return (
+    <div className="mx-auto max-w-xl py-2" data-testid="copilot-onboarding">
+      <h3 className="text-base font-semibold text-ink">What this copilot checks</h3>
+      <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+        <li>
+          <span className="font-semibold text-ink">Centavo ledger math.</span> Amounts are integer centavos (
+          <code className="font-mono">₱1.00 = 100</code>) and every journal entry must hold{' '}
+          <code className="font-mono">Σ debits === Σ credits</code>.
+        </li>
+        <li>
+          <span className="font-semibold text-ink">The 10 loan states.</span> Whether a move like{' '}
+          <code className="font-mono">APPROVED → DISBURSED</code> is legal, and what{' '}
+          <code className="font-mono">Idempotency-Key</code> and <code className="font-mono">If-Match</code> do on a
+          double-click.
+        </li>
+        <li>
+          <span className="font-semibold text-ink">GCash / Maya alternative data.</span> How utility bills, supplier
+          invoices and load cadence add up to a 0–1000 trust score.
+        </li>
+      </ul>
+      <p className="mt-4 text-sm font-semibold text-ink">Run one now:</p>
+      <div className="mt-2">
+        <StarterChips prompts={prompts} disabled={disabled} onPick={onPick} layout="wrap" />
+      </div>
+    </div>
+  )
+}
+
+const FAILURE_TITLE: Readonly<Record<ChatFailureKind, string>> = {
+  offline: 'No connection. Nothing was sent.',
+  'rate-limit': 'Rate limit reached (HTTP 429).',
+  malformed: 'A reply frame was not valid JSON.',
+  'mid-stream': 'The reply stopped part-way.',
+  closed: 'The connection closed before the reply finished.',
+  empty: 'The copilot returned an empty reply.',
+  server: 'The copilot could not produce a reply.',
+  http: 'The request failed.',
+}
+
+/** Seconds left of `Retry-After`, counted from when the banner appeared. 0 when there is none. */
+function useCountdown(seconds: number | null): number {
+  const [startedAt] = useState(() => Date.now())
+  const [now, setNow] = useState(startedAt)
+  const remaining = seconds === null ? 0 : Math.max(0, seconds - Math.floor((now - startedAt) / 1000))
+  const finished = remaining === 0
+  useEffect(() => {
+    if (finished) return
+    const timer = setInterval(() => setNow(Date.now()), 250)
+    return () => clearInterval(timer)
+  }, [finished])
+  return remaining
+}
+
+interface FailureBannerProps {
+  readonly failure: ChatFailure
+  /** The text of the user turn Retry will send again. */
+  readonly prompt: string
+  readonly onRetry: () => void
+}
+
+/**
+ * FE-08 inline failure card. It says what broke, keeps a code to quote, and
+ * offers one Retry that names the prompt it will re-send. Retry is locked while
+ * it runs (`disabled` + `aria-busy`) and, after a 429, until `Retry-After` ends.
+ * It enters with the same 150 ms fade/rise as a message (off under reduced motion).
+ */
+function FailureBanner({ failure, prompt, onRetry }: FailureBannerProps) {
+  const remaining = useCountdown(failure.kind === 'rate-limit' ? failure.retryAfterSeconds : null)
+  const countdownId = `copilot-retry-after-${failure.assistantId}`
+  const label = `Retry failed prompt: “${shortPrompt(prompt)}”`
+  return (
+    <div
+      role="alert"
+      data-testid="failure-banner"
+      data-kind={failure.kind}
+      className={`mt-4 rounded-md border border-l-4 border-slate-300 border-l-rose-600 bg-white px-3 py-3 text-sm text-ink ${ENTER_MOTION}`}
+    >
+      <p className="font-semibold">
+        <span aria-hidden="true">⚠ </span>
+        {FAILURE_TITLE[failure.kind]}
+        {failure.partial && ' The partial answer above is kept.'}
+      </p>
+      <p className="mt-1 text-slate-700">{failure.message}</p>
+      <p className="mt-1 font-mono text-xs text-slate-600">
+        code <span data-testid="failure-code">{failureCode(failure)}</span>
+      </p>
+      {remaining > 0 && (
+        <p id={countdownId} className="mt-1 font-mono text-xs text-slate-700">
+          Retry-After: {remaining} s
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={failure.retrying || remaining > 0}
+        aria-busy={failure.retrying ? 'true' : 'false'}
+        aria-describedby={remaining > 0 ? countdownId : undefined}
+        title={prompt}
+        className={`mt-3 inline-flex min-h-11 max-w-full items-center gap-2 rounded-md border border-main bg-main px-3 text-left text-sm font-semibold text-white transition-colors duration-150 ease-out hover:bg-slate-700 disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-600 motion-reduce:transition-none ${FOCUS_RING}`}
+      >
+        {failure.retrying ? (
+          <>
+            <span aria-hidden="true" className="inline-flex items-center gap-1">
+              <span className="copilot-dot" />
+              <span className="copilot-dot" />
+              <span className="copilot-dot" />
+            </span>
+            Retrying “{shortPrompt(prompt)}”…
+          </>
+        ) : (
+          <span className="wrap-anywhere">{label}</span>
+        )}
+      </button>
+    </div>
+  )
+}
+
+type DrillChoice = SabotageMode | 'off'
+
+interface SabotageToolbarProps {
+  readonly armed: DrillChoice
+  readonly onArm: (choice: DrillChoice) => void
+  readonly disabled: boolean
+  readonly onCrash: () => void
+}
+
+/**
+ * FE-08 drill toolbar: arm one failure for the next Send, without DevTools.
+ * One shot: it disarms itself when the request goes out, so Retry is clean.
+ */
+function SabotageToolbar({ armed, onArm, disabled, onCrash }: SabotageToolbarProps) {
+  return (
+    <details className="border-b border-slate-200 bg-canvas px-3 sm:px-4" data-testid="sabotage-toolbar">
+      <summary className={`flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-ink ${FOCUS_RING}`}>
+        Sabotage &amp; Resilience Drill Toolbar
+        <span className="font-mono text-xs font-normal text-slate-600">{armed === 'off' ? 'off' : `armed: ${armed}`}</span>
+      </summary>
+      <fieldset className="pb-3">
+        <legend className="text-xs font-semibold text-ink">Break the next request</legend>
+        <p id={DRILL_HINT_ID} className="mt-1 text-xs text-slate-600">
+          Applies to the next Send only, then turns off. Retry always goes out clean. Drills answer from the local
+          engine, never a paid model.
+        </p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(['off', ...SABOTAGE_MODES] as const).map((choice) => {
+            const radioId = `copilot-drill-${choice}`
+            return (
+              <div key={choice} className="flex items-center">
+                <input
+                  id={radioId}
+                  type="radio"
+                  name="copilot-drill"
+                  value={choice}
+                  checked={armed === choice}
+                  disabled={disabled}
+                  onChange={() => onArm(choice)}
+                  aria-invalid="false"
+                  aria-describedby={DRILL_HINT_ID}
+                  className="peer sr-only"
+                />
+                <label
+                  htmlFor={radioId}
+                  className="flex min-h-9 cursor-pointer items-center rounded border border-slate-300 bg-white px-2 font-mono text-xs text-ink peer-checked:border-amber-600 peer-checked:bg-amber-50 peer-checked:font-semibold peer-disabled:cursor-not-allowed peer-disabled:text-slate-500 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent"
+                >
+                  {choice === 'off' ? 'off (normal)' : choice}
+                </label>
+              </div>
+            )
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={onCrash}
+          className={`mt-3 min-h-11 rounded-md border border-amber-600 bg-white px-3 text-sm font-semibold text-ink hover:bg-amber-50 ${FOCUS_RING}`}
+        >
+          Throw a render error (tests <code className="font-mono">underwriting/error.tsx</code>)
+        </button>
+      </fieldset>
+    </details>
+  )
+}
+
+/** Throws during render, so the nearest route `error.tsx` catches it. Mounted only by the drill button. */
+function RenderErrorDrill(): never {
+  throw new Error('Sabotage drill: render error thrown inside the AI Copilot.')
+}
+
+/** An empty assistant bubble: it shows "thinking" until its first token (Tip 3). */
+function newPendingReply(createdAt: string): ChatMessage {
+  return { id: crypto.randomUUID(), role: 'assistant', parts: [{ type: 'text', text: '' }], createdAt, outcome: 'pending' }
+}
+
 interface ChatSessionProps extends StreamingUnderwritingChatProps {
   readonly initialMessages: readonly ChatMessage[]
   /**
@@ -211,13 +429,29 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
   const forceFollowRef = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  /** Tip 2: the controller of the request in flight, or null. One per request, never reused. */
+  /**
+   * Tip 2: the controller of the request in flight, or null. One per request, never reused.
+   * FE-08: it is also the in-flight lock. It is set before the first `await`, so a
+   * second click in the same frame (before `disabled` renders) sees it and does nothing.
+   */
   const abortRef = useRef<AbortController | null>(null)
+  /** FE-08: the drill armed for the next Send. One shot. */
+  const [drill, setDrill] = useState<DrillChoice>('off')
+  /** FE-08: the "Throw a render error" drill. */
+  const [crash, setCrash] = useState(false)
+  /** FE-08: Send pressed with nothing but whitespace. */
+  const [emptyError, setEmptyError] = useState(false)
 
   const busy = isBusy(state.status)
   const tooLong = draft.length > CHAT_LIMITS.maxUserChars
   const canSend = !busy && !tooLong && draft.trim() !== ''
   const hasMessages = state.messages.length > 0
+  const inputError = tooLong || emptyError
+  const failedPrompt = useMemo(() => {
+    const failure = state.failure
+    const user = failure === null ? undefined : state.messages.find((message) => message.id === failure.userId)
+    return user === undefined ? null : messageText(user)
+  }, [state.failure, state.messages])
 
   // ── Tip 1: smart auto-scroll ──────────────────────────────────────────────
 
@@ -280,10 +514,103 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
 
   // ── Tip 2: send / stop ────────────────────────────────────────────────────
 
+  /**
+   * Runs one request for the assistant bubble `assistantId`. Shared by Send and
+   * Retry. Every failure is dispatched with a kind, so the banner can name it.
+   */
+  const runRequest = useCallback(
+    (assistantId: string, history: ReturnType<typeof toWireHistory>, sabotage: SabotageMode | null): void => {
+      // Failure before send: no connection, or the network-drop drill. Nothing goes out.
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+      if (offline || sabotage === 'network-drop') {
+        dispatch({
+          type: 'FAIL',
+          id: assistantId,
+          kind: 'offline',
+          message:
+            sabotage === 'network-drop'
+              ? 'Sabotage drill (network-drop): the request failed before it left the browser. Your question is kept.'
+              : 'The browser reports no network connection. Your question is kept; retry when you are back online.',
+        })
+        return
+      }
+
+      const controller = new AbortController()
+      abortRef.current = controller
+      const release = (): void => {
+        if (abortRef.current === controller) abortRef.current = null
+      }
+
+      let settled = false
+      const onEvent = (event: ChatStreamEvent): void => {
+        // Every action carries this run's assistant ID. After Stop, the reducer
+        // no longer has it as `activeId`, so late events from this run are dropped.
+        switch (event.type) {
+          case 'meta':
+            dispatch({ type: 'META', id: assistantId, engine: event.engine })
+            break
+          case 'token':
+            dispatch({ type: 'TOKEN', id: assistantId, text: event.text })
+            break
+          case 'done':
+            settled = true
+            release()
+            dispatch({ type: 'DONE', id: assistantId, finishReason: event.finishReason })
+            break
+          case 'error':
+            settled = true
+            release()
+            dispatch({ type: 'FAIL', id: assistantId, message: event.message })
+            break
+        }
+      }
+
+      transport({ messages: history, signal: controller.signal, onEvent, ...(sabotage === null ? {} : { sabotage }) }).then(
+        () => {
+          release()
+          if (!settled && !controller.signal.aborted) {
+            dispatch({
+              type: 'FAIL',
+              id: assistantId,
+              kind: 'closed',
+              message: 'The connection closed before the reply finished.',
+            })
+          }
+        },
+        (error: unknown) => {
+          release()
+          // An abort is the user pressing Stop: already handled, not an error.
+          if (controller.signal.aborted) return
+          if (error instanceof ChatRequestError) {
+            dispatch({
+              type: 'FAIL',
+              id: assistantId,
+              message: error.message,
+              kind: error.kind,
+              status: error.status,
+              retryAfterSeconds: error.retryAfterSeconds,
+            })
+            return
+          }
+          const message = error instanceof Error && error.message !== '' ? error.message : 'The copilot request failed.'
+          dispatch({ type: 'FAIL', id: assistantId, kind: 'http', message })
+        },
+      )
+    },
+    [transport],
+  )
+
   const send = useCallback(
     (raw: string): void => {
       const text = raw.trim()
-      if (busy || text === '' || text.length > CHAT_LIMITS.maxUserChars) return
+      if (text === '') {
+        // FE-08 edge case: whitespace only is never sent, and the field says why.
+        setEmptyError(true)
+        inputRef.current?.focus()
+        return
+      }
+      // `abortRef` is the synchronous lock: a second Enter in the same frame stops here.
+      if (busy || abortRef.current !== null || text.length > CHAT_LIMITS.maxUserChars) return
 
       const createdAt = new Date().toISOString()
       const user: ChatMessage = {
@@ -295,64 +622,41 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
       }
       // The assistant bubble exists from this moment, empty. It shows "thinking"
       // until the first token is appended to it (Tip 3).
-      const assistant: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        parts: [{ type: 'text', text: '' }],
-        createdAt,
-        outcome: 'pending',
-      }
-
-      const controller = new AbortController()
-      abortRef.current = controller
+      const assistant = newPendingReply(createdAt)
       const history = toWireHistory([...state.messages, user])
+      const sabotage = drill === 'off' ? null : drill
 
       // Sending is an explicit "take me to the latest", even if the user had scrolled up.
       forceFollowRef.current = true
       setIsAtBottom(true)
       setDraft('')
+      setEmptyError(false)
+      setDrill('off')
       dispatch({ type: 'SUBMIT', user, assistant })
       // The question survives a reload even if the tab closes mid-reply.
       saveConversation([...state.messages, user])
-
-      let settled = false
-      const onEvent = (event: ChatStreamEvent): void => {
-        // Every action carries this run's assistant ID. After Stop, the reducer
-        // no longer has it as `activeId`, so late events from this run are dropped.
-        switch (event.type) {
-          case 'meta':
-            dispatch({ type: 'META', id: assistant.id, engine: event.engine })
-            break
-          case 'token':
-            dispatch({ type: 'TOKEN', id: assistant.id, text: event.text })
-            break
-          case 'done':
-            settled = true
-            dispatch({ type: 'DONE', id: assistant.id, finishReason: event.finishReason })
-            break
-          case 'error':
-            settled = true
-            dispatch({ type: 'FAIL', id: assistant.id, message: event.message })
-            break
-        }
-      }
-
-      transport({ messages: history, signal: controller.signal, onEvent }).then(
-        () => {
-          if (!settled && !controller.signal.aborted) {
-            dispatch({ type: 'FAIL', id: assistant.id, message: 'The connection closed before the reply finished.' })
-          }
-        },
-        (error: unknown) => {
-          // An abort is the user pressing Stop: already handled, not an error.
-          if (controller.signal.aborted) return
-          const message = error instanceof Error && error.message !== '' ? error.message : 'The copilot request failed.'
-          dispatch({ type: 'FAIL', id: assistant.id, message })
-        },
-      )
+      runRequest(assistant.id, history, sabotage)
     },
-    [busy, state.messages, transport],
+    [busy, state.messages, drill, runRequest],
   )
+
+  /**
+   * FE-08 "Retry with a brain": re-sends only the failed turn's prompt, writes
+   * the new reply into the failed reply's slot, and never runs twice. The
+   * `abortRef` lock is set inside `runRequest` before any await, so a double
+   * click in one frame sends one request.
+   */
+  const retry = (): void => {
+    const failure = state.failure
+    if (failure === null || failure.retrying || abortRef.current !== null) return
+    const index = state.messages.findIndex((message) => message.id === failure.userId)
+    if (index === -1) return
+    const assistant = newPendingReply(new Date().toISOString())
+    forceFollowRef.current = true
+    setIsAtBottom(true)
+    dispatch({ type: 'RETRY', assistant })
+    runRequest(assistant.id, toWireHistory(state.messages.slice(0, index + 1)), null)
+  }
 
   /**
    * Stop: (1) abort the HTTP request, (2) move the machine to `stopped`, which
@@ -373,6 +677,7 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
     clearConversation()
     forceFollowRef.current = true
     setIsAtBottom(true)
+    setEmptyError(false)
     inputRef.current?.focus()
   }
 
@@ -431,6 +736,9 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
         </button>
       </header>
 
+      <SabotageToolbar armed={drill} onArm={setDrill} disabled={busy} onCrash={() => setCrash(true)} />
+      {crash && <RenderErrorDrill />}
+
       <div className="relative min-h-0 flex-1">
         {/* role="log" defaults to a polite live region, which would read every token. It is off; the status line below speaks instead. */}
         <div
@@ -441,7 +749,8 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
           aria-label="Conversation"
           aria-busy={busy ? 'true' : 'false'}
           tabIndex={0}
-          className={`h-full overflow-x-hidden overflow-y-auto px-3 py-4 sm:px-4 ${FOCUS_RING}`}
+          // FE-08: `overscroll-contain` stops iOS rubber-banding the page while the log scrolls under the auto-scroll pin.
+          className={`h-full overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 sm:px-4 ${FOCUS_RING}`}
         >
           {hasMessages ? (
             <ol className="space-y-4">
@@ -450,18 +759,15 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
               ))}
             </ol>
           ) : (
-            <div className="mx-auto max-w-xl py-4">
-              <p className="text-sm text-slate-700">
-                Ask how a trust score was built, whether a loan can move{' '}
-                <code className="font-mono">APPROVED → DISBURSED</code>, why{' '}
-                <code className="font-mono">Σ debits === Σ credits</code>, or what{' '}
-                <code className="font-mono">Idempotency-Key</code> and <code className="font-mono">If-Match</code> do on a
-                double-click.
-              </p>
-              <div className="mt-4">
-                <StarterChips prompts={starterPrompts} disabled={busy} onPick={send} layout="wrap" />
-              </div>
-            </div>
+            <OnboardingCard prompts={starterPrompts} disabled={busy} onPick={send} />
+          )}
+          {state.failure !== null && failedPrompt !== null && (
+            <FailureBanner
+              key={`${state.failure.assistantId}-${state.failure.retrying ? 'retrying' : 'failed'}`}
+              failure={state.failure}
+              prompt={failedPrompt}
+              onRetry={retry}
+            />
           )}
         </div>
 
@@ -484,14 +790,10 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
       <form
         onSubmit={handleSubmit}
         aria-busy={busy ? 'true' : 'false'}
-        className="border-t border-slate-200 bg-canvas px-3 py-3 sm:px-4"
+        // FE-08: the bottom inset keeps the input clear of the iPhone home indicator when the page runs edge to edge.
+        className="border-t border-slate-200 bg-canvas px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4"
         noValidate
       >
-        {state.error !== null && (
-          <p role="alert" className="mb-2 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-            <span className="font-semibold">Reply failed.</span> {state.error}
-          </p>
-        )}
         {hasMessages && (
           <div className="mb-2">
             <StarterChips prompts={starterPrompts} disabled={busy} onPick={send} layout="strip" />
@@ -507,13 +809,16 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
             name="message"
             rows={2}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              setDraft(event.target.value)
+              setEmptyError(false)
+            }}
             onKeyDown={handleKeyDown}
-            aria-invalid={tooLong ? 'true' : 'false'}
-            aria-describedby={tooLong ? `${HINT_ID} ${ERROR_ID}` : HINT_ID}
+            aria-invalid={inputError ? 'true' : 'false'}
+            aria-describedby={inputError ? `${HINT_ID} ${ERROR_ID}` : HINT_ID}
             placeholder="e.g. Can a REJECTED loan be DISBURSED?"
             className={`min-h-11 min-w-0 flex-1 resize-none rounded-md border bg-white px-3 py-2 text-base text-ink placeholder:text-slate-500 sm:text-sm ${
-              tooLong ? 'border-rose-600' : 'border-slate-500'
+              inputError ? 'border-rose-600' : 'border-slate-500'
             } ${FOCUS_RING}`}
           />
           <button
@@ -538,9 +843,11 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
         <p id={HINT_ID} className="mt-1 text-xs text-slate-600">
           Enter sends, Shift+Enter adds a line. The conversation is saved in this browser only.
         </p>
-        {tooLong && (
+        {inputError && (
           <p id={ERROR_ID} role="alert" className="mt-1 text-xs font-semibold text-rose-800">
-            {draft.length} of {CHAT_LIMITS.maxUserChars} characters. Shorten the message to send it.
+            {tooLong
+              ? `${draft.length} of ${CHAT_LIMITS.maxUserChars} characters. Shorten the message to send it.`
+              : 'Type a question first. Spaces and line breaks alone are not sent.'}
           </p>
         )}
       </form>

@@ -24,16 +24,24 @@
  * `done` frame is sent after an abort: the client already knows it stopped.
  *
  * What the model says is configured in src/lib/ai/underwriting-model.ts.
+ *
+ * FE-08 drills: `x-sabotage-mode: mid-stream-error | rate-limit-429 |
+ * malformed-tool-json | slow-3s` (or `"sabotage"` in the body) breaks this one
+ * request on purpose. See src/lib/ai/sabotage.ts.
  */
 import { APICallError, RetryError, streamText } from 'ai'
 import {
   encodeSseFrame,
   isRequestId,
+  isSabotageMode,
   parseChatRequest,
+  SABOTAGE_HEADER,
+  SABOTAGE_MODES,
   type ChatStreamEvent,
   type WireMessage,
 } from '../../../features/ai-copilot/chatProtocol.ts'
 import { activeRequests } from '../../../lib/ai/active-requests.ts'
+import { sabotageResponse } from '../../../lib/ai/sabotage.ts'
 import { chatStats, type ModelOutcome } from '../../../lib/ai/chat-stats.ts'
 import { streamLocalReply } from '../../../lib/ai/local-engine.ts'
 import { CHAT_RATE_LIMIT, chatRateLimiter, clientKey, describeWait } from '../../../lib/ai/rate-limit.ts'
@@ -277,6 +285,17 @@ export async function POST(req: Request): Promise<Response> {
   const parsed = parseChatRequest(body)
   if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
   const { messages, requestId } = parsed
+
+  // FE-08 drills: header first, then `sabotage` in the body. An unknown mode is a 400, not ignored.
+  const rawSabotage =
+    req.headers.get(SABOTAGE_HEADER) ??
+    (typeof body === 'object' && body !== null && 'sabotage' in body ? body.sabotage : null)
+  if (rawSabotage !== null && rawSabotage !== '') {
+    if (!isSabotageMode(rawSabotage)) {
+      return Response.json({ error: `Unknown ${SABOTAGE_HEADER}. Use one of: ${SABOTAGE_MODES.join(', ')}.` }, { status: 400 })
+    }
+    return sabotageResponse(rawSabotage, messages, req)
+  }
 
   // 2. Pick the engine. Keys are read here, on the server, per request.
   const engine = resolveChatEngine()

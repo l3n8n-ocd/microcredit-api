@@ -232,7 +232,7 @@ describe('StreamingUnderwritingChat', () => {
     cleanup()
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([{ role: 'admin', parts: 'x' }, 42, null]))
     renderChat()
-    expect(within(log()).getAllByRole('listitem')).toHaveLength(STARTERS.length) // starter chips only
+    expect(within(within(log()).getByRole('list', { name: 'Starter prompts' })).getAllByRole('listitem')).toHaveLength(STARTERS.length)
     expect(log().querySelector('[data-role]')).toBeNull()
   })
 

@@ -151,9 +151,10 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (409 tests)                |
+| `npm test`          | Run the Vitest suite once (429 tests)                |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
+| `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 32 browser checks and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -354,6 +355,17 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
     the `www.<domain>  CNAME  l3n8n-ocd.github.io` record it would need and marks it TODO.
   - **File map** of the deployed React + Vite + Tailwind v4 repo, from `vite.config.js`
     (`base: '/portfolio/'`) to `.github/workflows/deploy.yml`.
+- **FE-08 · Error States, Empty States, Edge Cases (Checkpoint 1):** [`docs/FE-08_ERROR_AND_EDGE_CASES.md`](./docs/FE-08_ERROR_AND_EDGE_CASES.md) · [`src/app/error.tsx`](./src/app/error.tsx) · [`src/features/ai-copilot/StreamingUnderwritingChat.tsx`](./src/features/ai-copilot/StreamingUnderwritingChat.tsx)
+  - **7 failure modes, each one click away:** the copilot's drill toolbar sends `x-sabotage-mode`
+    (`mid-stream-error`, `rate-limit-429`, `malformed-tool-json`, `slow-3s`) to `/api/chat`; `network-drop` fails
+    before `fetch`. Every banner has a code (`ERR_MID_STREAM`, `HTTP_429`, `ERR_MALFORMED_FRAME`, `ERR_OFFLINE`).
+  - **Retry names the failed prompt and re-sends only that turn.** A double-click sends one request: `abortRef`
+    locks before the first `await`. Proven in Vitest (two clicks in one `act()`) and in the browser (`dblclick`).
+  - **Skeletons share their size constants with the real boxes:** `score-card` 82 px = real stat card,
+    `ledger-row` 29 px = real `/health` row, and 0 layout shift at the first token. Measuring found and fixed a
+    3 px jump in FE-06's thinking indicator.
+  - `npm test` 429/429, `npm run test:e2e:fe08` 32/32 ([`e2e/fe08.mjs`](./e2e/fe08.mjs)); route boundaries
+    `src/app/error.tsx`, `src/app/underwriting/error.tsx`, `src/app/not-found.tsx`.
 
 ## License
 

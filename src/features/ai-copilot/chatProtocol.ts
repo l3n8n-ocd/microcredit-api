@@ -45,6 +45,23 @@ export const CHAT_LIMITS = {
   maxAssistantChars: 12_000,
 } as const
 
+/**
+ * FE-08 sabotage drills. One mode breaks one request on purpose, so a reviewer
+ * can see every designed failure state without DevTools. Sent as the
+ * `x-sabotage-mode` header (or `sabotage` in the body). A drill never calls a
+ * hosted model: the server answers from the local rule engine and labels it.
+ *
+ * `network-drop` never reaches the server. The browser fails it before `fetch`,
+ * which is the point: nothing was sent.
+ */
+export const SABOTAGE_MODES = ['mid-stream-error', 'rate-limit-429', 'malformed-tool-json', 'slow-3s', 'network-drop'] as const
+export type SabotageMode = (typeof SABOTAGE_MODES)[number]
+export const SABOTAGE_HEADER = 'x-sabotage-mode'
+
+export function isSabotageMode(value: unknown): value is SabotageMode {
+  return typeof value === 'string' && (SABOTAGE_MODES as readonly string[]).includes(value)
+}
+
 export function encodeSseFrame(event: ChatStreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`
 }
@@ -83,7 +100,11 @@ export function isChatStreamEvent(value: unknown): value is ChatStreamEvent {
  * line that ends a frame, then emits every complete event. Malformed frames and
  * `: comment` keep-alives are skipped, never thrown.
  */
-export function createSseParser(onEvent: (event: ChatStreamEvent) => void): { push: (chunk: string) => void } {
+export function createSseParser(
+  onEvent: (event: ChatStreamEvent) => void,
+  /** Called with the raw `data` of a frame that is not valid JSON. The parser still skips it. */
+  onMalformed?: (data: string) => void,
+): { push: (chunk: string) => void } {
   let buffer = ''
   return {
     push(chunk) {
@@ -102,7 +123,8 @@ export function createSseParser(onEvent: (event: ChatStreamEvent) => void): { pu
             const parsed: unknown = JSON.parse(data)
             if (isChatStreamEvent(parsed)) onEvent(parsed)
           } catch {
-            // A frame that is not JSON is dropped; the stream keeps going.
+            // A frame that is not JSON is dropped. The caller decides whether that ends the stream.
+            onMalformed?.(data)
           }
         }
         boundary = buffer.indexOf('\n\n')

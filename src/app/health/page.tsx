@@ -1,3 +1,4 @@
+import { LEDGER_CELL_CLASS, LEDGER_ROW_CLASS } from '../../components/ui/SkeletonCard.tsx'
 import { headers } from 'next/headers'
 import type { HealthReport } from '../../features/health/health.ts'
 
@@ -79,9 +80,9 @@ export default async function HealthPage() {
         </thead>
         <tbody>
           {invariants.map((row) => (
-            <tr key={row.label} className="border-t border-slate-200">
-              <td className="py-1 pr-3">{row.label}</td>
-              <td className="py-1 pr-3 font-mono">{row.value}</td>
+            <tr key={row.label} className={LEDGER_ROW_CLASS}>
+              <td className={LEDGER_CELL_CLASS}>{row.label}</td>
+              <td className={`${LEDGER_CELL_CLASS} font-mono`}>{row.value}</td>
               <td className="py-1 font-mono">
                 <span className={row.pass ? 'text-accent' : 'text-rose-600'}>{row.pass ? '✓ pass' : '✗ fail'}</span>
               </td>

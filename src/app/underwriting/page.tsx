@@ -1,3 +1,4 @@
+import { STAT_CARD_CLASS } from '../../components/ui/SkeletonCard.tsx'
 import { SEED_LOANS } from '../../features/disbursement/seedLoans.ts'
 import { APPLICANT_PROFILES } from '../../features/scoring/applicants.ts'
 import { scoreApplicant } from '../../features/scoring/scoreEngine.ts'
@@ -40,7 +41,7 @@ export default function UnderwritingPage() {
           { label: 'Awaiting review', value: String(applied + underReview) },
           { label: 'Score signals', value: '3' },
         ].map((stat) => (
-          <div key={stat.label} className="rounded-lg border border-slate-200 bg-white p-4">
+          <div key={stat.label} className={STAT_CARD_CLASS}>
             <dt className="text-xs text-slate-500">{stat.label}</dt>
             <dd className="mt-1 font-mono text-lg font-semibold">{stat.value}</dd>
           </div>

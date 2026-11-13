@@ -80,10 +80,11 @@ lint-staged + commitlint (git hooks), GitHub Actions (CI). Capstone spec: [`SPEC
 | `npm run dev`       | Start the Next.js dev server (App Router)                  |
 | `npm run typecheck` | Strict-mode type check (`tsc --noEmit`)                    |
 | `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports except Next route files)|
-| `npm test`          | Run Vitest once (409 tests in `src/`, `playground/`, `agents/`) |
+| `npm test`          | Run Vitest once (429 tests in `src/`, `playground/`, `agents/`) |
 | `npm run build`     | Production build (`next build`)                            |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
+| `npm run test:e2e:fe08` | FE-08: after `build`, the sabotage drill (32 browser checks) and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes responsive at 375px/1280px, the AI Copilot streaming / Stop / scroll checks, and keyboard-only checks on `/playground` (Playwright, `next start`) |
 
 **Before saying any change is done, run `typecheck`, `lint`, and `test`, and

@@ -10,13 +10,34 @@
  * token from the aborted request that lands late cannot leak into the new reply.
  */
 import { CHAT_LIMITS, type EngineInfo, type WireMessage } from './chatProtocol.ts'
-import { messageText, type ChatMessage, type ChatStatus } from './chatTypes.ts'
+import { messageText, type ChatFailureKind, type ChatMessage, type ChatStatus } from './chatTypes.ts'
+
+/**
+ * FE-08: the failed turn, in enough detail to retry it. Retry re-sends the user
+ * turn `userId` and writes the new reply into the slot of `assistantId`, so the
+ * rest of the conversation is never touched.
+ */
+export interface ChatFailure {
+  readonly kind: ChatFailureKind
+  readonly message: string
+  /** The user turn whose reply failed: what Retry sends again. */
+  readonly userId: string
+  /** The failed reply. Its partial text stays on screen until Retry replaces it. */
+  readonly assistantId: string
+  /** True when some reply text arrived before the failure. */
+  readonly partial: boolean
+  readonly status: number | null
+  readonly retryAfterSeconds: number | null
+  /** True from the Retry click until the retried reply's first token (or its own failure). */
+  readonly retrying: boolean
+}
 
 export interface ChatState {
   readonly status: ChatStatus
   readonly messages: readonly ChatMessage[]
   readonly activeId: string | null
   readonly error: string | null
+  readonly failure: ChatFailure | null
 }
 
 export type ChatAction =
@@ -24,12 +45,53 @@ export type ChatAction =
   | { readonly type: 'META'; readonly id: string; readonly engine: EngineInfo }
   | { readonly type: 'TOKEN'; readonly id: string; readonly text: string }
   | { readonly type: 'DONE'; readonly id: string; readonly finishReason: string }
-  | { readonly type: 'FAIL'; readonly id: string; readonly message: string }
+  | {
+      readonly type: 'FAIL'
+      readonly id: string
+      readonly message: string
+      /** When absent: `mid-stream` if text had arrived, else `server`. */
+      readonly kind?: ChatFailureKind
+      readonly status?: number | null
+      readonly retryAfterSeconds?: number | null
+    }
+  | { readonly type: 'RETRY'; readonly assistant: ChatMessage }
   | { readonly type: 'STOP' }
   | { readonly type: 'CLEAR' }
 
 export function createInitialState(messages: readonly ChatMessage[]): ChatState {
-  return { status: 'idle', messages, activeId: null, error: null }
+  return { status: 'idle', messages, activeId: null, error: null, failure: null }
+}
+
+/** The user turn just before `assistantId`: the prompt that reply was answering. */
+function promptBefore(messages: readonly ChatMessage[], assistantId: string): ChatMessage | undefined {
+  const index = messages.findIndex((message) => message.id === assistantId)
+  return messages.slice(0, Math.max(index, 0)).findLast((message) => message.role === 'user')
+}
+
+function failWith(
+  state: ChatState,
+  details: { readonly kind: ChatFailureKind; readonly message: string; readonly status: number | null; readonly retryAfterSeconds: number | null },
+): ChatState {
+  const assistantId = state.activeId
+  const active = state.messages.find((message) => message.id === assistantId)
+  const user = assistantId === null ? undefined : promptBefore(state.messages, assistantId)
+  return {
+    ...state,
+    status: 'error',
+    messages: updateActive(state, (message) => ({ ...message, outcome: 'error' })),
+    activeId: null,
+    error: details.message,
+    failure:
+      assistantId === null || user === undefined
+        ? null
+        : {
+            ...details,
+            userId: user.id,
+            assistantId,
+            partial: active !== undefined && messageText(active) !== '',
+            retrying: false,
+          },
+  }
 }
 
 /** A request is in flight: waiting for the first token, or receiving tokens. */
@@ -51,7 +113,21 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: [...state.messages, action.user, action.assistant],
         activeId: action.assistant.id,
         error: null,
+        failure: null,
       }
+
+    case 'RETRY': {
+      // error → submitted, once. A second Retry while the first is in flight is ignored.
+      const failure = state.failure
+      if (state.status !== 'error' || failure === null || failure.retrying) return state
+      return {
+        status: 'submitted',
+        messages: state.messages.map((message) => (message.id === failure.assistantId ? action.assistant : message)),
+        activeId: action.assistant.id,
+        error: null,
+        failure: { ...failure, assistantId: action.assistant.id, retrying: true },
+      }
+    }
 
     case 'CLEAR':
       return createInitialState([])
@@ -64,6 +140,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         status: 'stopped',
         messages: updateActive(state, (message) => ({ ...message, outcome: 'stopped' })),
         activeId: null,
+        failure: null,
       }
 
     default:
@@ -82,6 +159,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         status: 'streaming',
+        // A retried reply that streams has recovered: the failure banner goes.
+        failure: null,
         messages: updateActive(state, (message) => ({
           ...message,
           parts: [{ type: 'text', text: messageText(message) + action.text }],
@@ -91,17 +170,17 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'DONE': {
       const active = state.messages.find((message) => message.id === state.activeId)
       if (active === undefined || messageText(active) === '') {
-        return {
-          ...state,
-          status: 'error',
-          messages: updateActive(state, (message) => ({ ...message, outcome: 'error' })),
-          activeId: null,
-          error: 'The copilot returned an empty reply. Send the message again.',
-        }
+        return failWith(state, {
+          kind: 'empty',
+          message: 'The copilot returned an empty reply. Send the message again.',
+          status: null,
+          retryAfterSeconds: null,
+        })
       }
       return {
         ...state,
         status: 'idle',
+        failure: null,
         messages: updateActive(state, (message) =>
           action.finishReason === 'stop'
             ? { ...message, outcome: 'complete' }
@@ -111,14 +190,16 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       }
     }
 
-    case 'FAIL':
-      return {
-        ...state,
-        status: 'error',
-        messages: updateActive(state, (message) => ({ ...message, outcome: 'error' })),
-        activeId: null,
-        error: action.message,
-      }
+    case 'FAIL': {
+      const active = state.messages.find((message) => message.id === state.activeId)
+      const partial = active !== undefined && messageText(active) !== ''
+      return failWith(state, {
+        kind: action.kind ?? (partial ? 'mid-stream' : 'server'),
+        message: action.message,
+        status: action.status ?? null,
+        retryAfterSeconds: action.retryAfterSeconds ?? null,
+      })
+    }
   }
 }
 

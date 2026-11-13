@@ -15,6 +15,19 @@ import type { EngineInfo } from './chatProtocol.ts'
  */
 export type ChatStatus = 'idle' | 'submitted' | 'streaming' | 'stopped' | 'error'
 
+/**
+ * FE-08: why a reply failed. Each kind has its own recovery copy and code.
+ *   offline     nothing was sent (no connection, or the network-drop drill)
+ *   rate-limit  HTTP 429; `Retry-After` drives a countdown
+ *   malformed   a stream frame was not valid JSON (a cut-off tool payload)
+ *   mid-stream  the server sent an error frame after some text arrived
+ *   closed      the connection ended before a `done` frame
+ *   empty       `done` arrived with no text
+ *   server      the server sent an error frame before any text
+ *   http        any other non-2xx response
+ */
+export type ChatFailureKind = 'offline' | 'rate-limit' | 'malformed' | 'mid-stream' | 'closed' | 'empty' | 'server' | 'http'
+
 /** A message is a list of typed parts. FE-06 has text only; FE-07 adds tool-call and tool-result parts here. */
 export interface TextPart {
   readonly type: 'text'

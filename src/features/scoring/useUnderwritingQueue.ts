@@ -59,6 +59,10 @@ export interface UnderwritingQueue {
   /** What the user typed, shown in the input immediately. */
   readonly query: string
   readonly setQuery: (query: string) => void
+  /** The query the list is filtered by right now (after the debounce). Empty states name this one. */
+  readonly activeQuery: string
+  /** Back to every loan at once: filter ALL, empty query, no debounce wait. */
+  readonly resetFilters: () => void
   /** True while a command is in flight. Every action button is disabled meanwhile. */
   readonly inFlight: boolean
   /** Sends one command; returns null if another command is already in flight. */
@@ -105,6 +109,11 @@ export function useUnderwritingQueue(server: DisbursementServer, options: UseUnd
     [loans, profiles, scores],
   )
   const visibleRows = useMemo(() => filterQueue(rows, filter, debouncedQuery), [rows, filter, debouncedQuery])
+  const resetFilters = useCallback(() => {
+    setFilter('ALL')
+    setQuery('')
+    setDebouncedQuery('')
+  }, [])
 
   const inFlightRef = useRef(false)
   const [inFlight, setInFlight] = useState(false)
@@ -128,5 +137,18 @@ export function useUnderwritingQueue(server: DisbursementServer, options: UseUnd
     [server, onServerChange],
   )
 
-  return { loans, ledger, rows, visibleRows, filter, setFilter, query, setQuery, inFlight, send }
+  return {
+    loans,
+    ledger,
+    rows,
+    visibleRows,
+    filter,
+    setFilter,
+    query,
+    setQuery,
+    activeQuery: debouncedQuery,
+    resetFilters,
+    inFlight,
+    send,
+  }
 }

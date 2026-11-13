@@ -7,7 +7,7 @@ import { describeCommand, type Announcement } from './announcement.ts'
 import { APPLICANT_PROFILES, type ApplicantProfile } from './applicants.ts'
 import { RepaymentPanel } from './RepaymentPanel.tsx'
 import { MAX_SCORE, REASON_TEXT } from './scoreEngine.ts'
-import { QUEUE_FILTERS, useUnderwritingQueue, type QueueRow } from './useUnderwritingQueue.ts'
+import { QUEUE_FILTERS, useUnderwritingQueue, type QueueFilter, type QueueRow } from './useUnderwritingQueue.ts'
 
 export interface UnderwritingWorkbenchProps {
   readonly server: DisbursementServer
@@ -155,7 +155,7 @@ export function UnderwritingWorkbench({
             }}
             aria-invalid="false"
             aria-describedby={`${searchHintId} ${countId}`}
-            className="w-full rounded-md border border-slate-500 bg-slate-950 px-3 py-2 text-slate-100 focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+            className="w-full rounded-md border border-slate-500 bg-slate-950 px-3 py-2 text-base text-slate-100 focus:ring-2 focus:ring-emerald-400 focus:outline-none"
           />
           <p id={searchHintId} className="text-xs text-slate-300">
             e.g. Liza or L-1044. The list updates when you stop typing.
@@ -166,48 +166,65 @@ export function UnderwritingWorkbench({
           Showing {queue.visibleRows.length} of {queue.rows.length} loans.
         </p>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <caption className="sr-only">Underwriting queue</caption>
-            <thead className="text-slate-300">
-              <tr>
-                <th scope="col" className="py-1 pr-3">Loan</th>
-                <th scope="col" className="py-1 pr-3">Borrower</th>
-                <th scope="col" className="py-1 pr-3">State</th>
-                <th scope="col" className="py-1 pr-3">Trust score</th>
-                <th scope="col" className="py-1">
-                  <span className="sr-only">Action</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {queue.visibleRows.map((row) => (
-                <tr
-                  key={row.loan.id}
-                  aria-current={row.loan.id === selectedId ? 'true' : undefined}
-                  className={`border-t border-slate-800 ${row.loan.id === selectedId ? 'bg-slate-800/60' : ''}`}
-                >
-                  <td className="py-1 pr-3 font-mono">{row.loan.id}</td>
-                  <td className="py-1 pr-3">{row.profile?.name ?? row.loan.borrowerId}</td>
-                  <td className="py-1 pr-3 font-mono">{row.loan.status}</td>
-                  <td className="py-1 pr-3 font-mono">{row.score === null ? '—' : `${row.score.score} · ${row.score.band}`}</td>
-                  <td className="py-1">
-                    <button
-                      type="button"
-                      aria-label={`Review ${row.loan.id}`}
-                      onClick={() => {
-                        select(row)
-                      }}
-                      className="rounded border border-slate-600 px-2 py-1 text-xs hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
-                    >
-                      Review
-                    </button>
-                  </td>
+        {queue.visibleRows.length === 0 ? (
+          <NoResults
+            filter={queue.filter}
+            query={queue.activeQuery}
+            total={queue.rows.length}
+            sample={queue.rows.find((row) => row.loan.status === 'APPLIED') ?? null}
+            onReset={() => {
+              queue.resetFilters()
+              searchRef.current?.focus()
+            }}
+            onOpenSample={(row) => {
+              queue.resetFilters()
+              select(row)
+            }}
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <caption className="sr-only">Underwriting queue</caption>
+              <thead className="text-slate-300">
+                <tr>
+                  <th scope="col" className="py-1 pr-3">Loan</th>
+                  <th scope="col" className="py-1 pr-3">Borrower</th>
+                  <th scope="col" className="py-1 pr-3">State</th>
+                  <th scope="col" className="py-1 pr-3">Trust score</th>
+                  <th scope="col" className="py-1">
+                    <span className="sr-only">Action</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {queue.visibleRows.map((row) => (
+                  <tr
+                    key={row.loan.id}
+                    aria-current={row.loan.id === selectedId ? 'true' : undefined}
+                    className={`border-t border-slate-800 ${row.loan.id === selectedId ? 'bg-slate-800/60' : ''}`}
+                  >
+                    <td className="py-1 pr-3 font-mono">{row.loan.id}</td>
+                    <td className="py-1 pr-3">{row.profile?.name ?? row.loan.borrowerId}</td>
+                    <td className="py-1 pr-3 font-mono">{row.loan.status}</td>
+                    <td className="py-1 pr-3 font-mono">{row.score === null ? '—' : `${row.score.score} · ${row.score.band}`}</td>
+                    <td className="py-1">
+                      <button
+                        type="button"
+                        aria-label={`Review ${row.loan.id}`}
+                        onClick={() => {
+                          select(row)
+                        }}
+                        className="rounded border border-slate-600 px-2 py-1 text-xs hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none"
+                      >
+                        Review
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {selected !== null && (
@@ -297,6 +314,57 @@ export function UnderwritingWorkbench({
         onAnnounce={setAnnouncement}
       />
     </section>
+  )
+}
+
+interface NoResultsProps {
+  readonly filter: QueueFilter
+  readonly query: string
+  readonly total: number
+  /** An APPLIED loan to open instead, or null when there is none. */
+  readonly sample: QueueRow | null
+  readonly onReset: () => void
+  readonly onOpenSample: (row: QueueRow) => void
+}
+
+/**
+ * FE-08 zero-results state. It names what is filtering the list and offers two
+ * ways out: reset to every loan, or open a sample application to review.
+ */
+function NoResults({ filter, query, total, sample, onReset, onOpenSample }: NoResultsProps) {
+  const trimmed = query.trim()
+  const button =
+    'min-h-11 rounded-md px-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none'
+  return (
+    <div className="rounded-lg border border-dashed border-slate-600 bg-slate-900/60 p-4" data-testid="queue-empty">
+      <p className="text-base font-semibold text-slate-100">No loans match this view.</p>
+      <p className="mt-1 text-sm text-slate-300">
+        State filter <code className="font-mono text-slate-100">{filter}</code>
+        {trimmed === '' ? (
+          ' has no loans right now.'
+        ) : (
+          <>
+            {' '}
+            and search <code className="font-mono text-slate-100">“{trimmed}”</code> match nothing.
+          </>
+        )}{' '}
+        Search looks at the loan ID, borrower ID and business name.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" onClick={onReset} className={`${button} bg-emerald-500 text-slate-950`}>
+          Reset filters &amp; show all loans ({total})
+        </button>
+        {sample !== null && (
+          <button
+            type="button"
+            onClick={() => onOpenSample(sample)}
+            className={`${button} border border-slate-500 text-slate-100 hover:bg-slate-800`}
+          >
+            Load sample borrower application ({sample.loan.id} · {sample.loan.status})
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
