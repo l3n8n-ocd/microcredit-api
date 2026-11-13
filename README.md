@@ -346,6 +346,14 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
   - **Recording:** [`docs/assets/curated/fl-07-agent-run.webm`](./docs/assets/curated/fl-07-agent-run.webm),
     one unedited run on `/agent`. Locally the fetch is answered by OSV.dev because GitHub's advisory API
     is blocked from the build machine; the model planner is tested against a mock model only.
+- **PF-04 · Personal Website Live on the FlyRank Domain & DNS Walkthrough (Week 5 General AI Fluency):** [`docs/PF-04_DNS_WALKTHROUGH.md`](./docs/PF-04_DNS_WALKTHROUGH.md) · live portfolio: [l3n8n-ocd.github.io/portfolio](https://l3n8n-ocd.github.io/portfolio/)
+  - **The real lookup:** `l3n8n-ocd.github.io` answers with four `A` records (`185.199.108.153`–`111.153`,
+    `TTL` 3600) from `github.io`'s NS1 and Route 53 nameservers. Then `GET /portfolio/` returns `HTTP/2 200`
+    from `server: GitHub.com`.
+  - **`CNAME` explained, not claimed:** the portfolio has no custom domain yet, so the walkthrough shows
+    the `www.<domain>  CNAME  l3n8n-ocd.github.io` record it would need and marks it TODO.
+  - **File map** of the deployed React + Vite + Tailwind v4 repo, from `vite.config.js`
+    (`base: '/portfolio/'`) to `.github/workflows/deploy.yml`.
 
 ## License
 
