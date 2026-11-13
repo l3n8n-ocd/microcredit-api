@@ -151,12 +151,13 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (461 tests)                |
+| `npm test`          | Run the Vitest suite once (473 tests)                |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
 | `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 32 browser checks and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e:fe07` | After `build`: FE-07 tool cards, 14 browser checks and the 6 tool-state screenshots |
-| `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
+| `npm run test:e2e`  | After `build`: the Playwright primary flow (`e2e/primary-flow.spec.ts`): Disburse replay, then the copilot with a tool card, mocked `/api/chat` |
+| `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes at 375px/1280px with no overflow, and the AI Copilot streaming checks |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
 Conventional Commits (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`).
@@ -399,6 +400,15 @@ or chip) reaches `output-error` on demand.
     A double-click pays once, and the replay test returns `201 REPLAYED` with 1 ledger entry.
   - `npm test` 461/461 (32 new), `npm run test:e2e:fe07` 14/14 ([`e2e/fe07.mjs`](./e2e/fe07.mjs)). On the live
     site, one hosted-model call (Gemini) streamed all four tool states: one call, not a success rate.
+- **FE-09 · Testing Pass (Vitest + RTL + Playwright + CI):** [`docs/FE-09_TESTING_PASS.md`](./docs/FE-09_TESTING_PASS.md) · [`src/features/__tests__/fe09-testing-pass.test.tsx`](./src/features/__tests__/fe09-testing-pass.test.tsx) · [`e2e/primary-flow.spec.ts`](./e2e/primary-flow.spec.ts) · [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
+  - **12 component tests on the three riskiest UIs:** chat pending, streaming (open code fence + tool part),
+    mid-stream error and `429` with Retry, and Stop; Disburse bounds, `500000` debits = `500000` credits, and the
+    `Idempotency-Key` replay; the 4-state tool card and the Approve-only payout. `/api/chat` is mocked with
+    `vi.spyOn(globalThis, 'fetch')`, and any other request fails the test.
+  - **Role, label and text queries only:** every `data-testid` is gone from the components (34) and the
+    tests (49 queries). `npm test` 473/473.
+  - **`npm run test:e2e`** walks `/` → replay → `/underwriting` → tool card with zero console errors. CI runs
+    typecheck, lint, Vitest, build, then Playwright on every push and pull request to `main`.
 
 ## License
 

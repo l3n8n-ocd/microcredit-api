@@ -53,11 +53,19 @@ const input = (): HTMLTextAreaElement => screen.getByLabelText<HTMLTextAreaEleme
 const sendButton = (): HTMLButtonElement => screen.getByRole<HTMLButtonElement>('button', { name: 'Send' })
 const stopButton = (): HTMLButtonElement => screen.getByRole<HTMLButtonElement>('button', { name: 'Stop' })
 const log = (): HTMLElement => screen.getByRole('log', { name: 'Conversation' })
+/** The newest assistant reply: the group named "Copilot reply". */
 const lastAssistantBody = (): HTMLElement => {
-  const body = screen.getAllByTestId('assistant-body').at(-1)
+  const body = screen.getAllByRole('group', { name: 'Copilot reply' }).at(-1)
   if (body === undefined) throw new Error('no assistant message rendered')
   return body
 }
+
+/** Code blocks in a reply: `code` elements inside a block that reports aria-busy (open or closed fence). */
+const codeBlocks = (body: HTMLElement): HTMLElement[] =>
+  within(body)
+    .queryAllByRole('code')
+    .filter((code) => code.closest('[aria-busy]') !== null)
+const fenceOpen = (code: HTMLElement | undefined): string | null | undefined => code?.closest('[aria-busy]')?.getAttribute('aria-busy')
 
 function sendMessage(text: string): void {
   fireEvent.change(input(), { target: { value: text } })
@@ -104,7 +112,7 @@ describe('StreamingUnderwritingChat', () => {
 
     // submitted: the assistant bubble already exists and holds the thinking indicator.
     const body = lastAssistantBody()
-    expect(within(body).getByTestId('thinking-indicator').textContent).toContain('Thinking')
+    expect(within(body).getByText('Thinking…')).toBeDefined()
     expect(log().getAttribute('aria-busy')).toBe('true')
     expect(screen.getByRole('status').textContent).toBe('Copilot is thinking.')
     expect(stopButton()).toBeDefined()
@@ -114,14 +122,14 @@ describe('StreamingUnderwritingChat', () => {
     const call = callAt(calls, 0)
     emit(call, { type: 'meta', engine: { kind: 'local', label: 'local rule engine' } }, token('Trust '))
     expect(lastAssistantBody()).toBe(body)
-    expect(screen.queryByTestId('thinking-indicator')).toBeNull()
+    expect(screen.queryByText('Thinking…')).toBeNull()
     expect(body.textContent).toBe('Trust')
     expect(screen.getByRole('status').textContent).toBe('Copilot is replying.')
 
     // Tokens append one by one.
     emit(call, token('score '), token('**980'), token(' / 1000**'))
     expect(body.textContent).toBe('Trust score 980 / 1000')
-    expect(body.querySelector('strong')?.textContent).toBe('980 / 1000')
+    expect(within(body).getByRole('strong').textContent).toBe('980 / 1000')
 
     emit(call, DONE)
     expect(lastAssistantBody()).toBe(body)
@@ -144,7 +152,7 @@ describe('StreamingUnderwritingChat', () => {
     // The partial text stays, flagged.
     // Stopped inside "**`Idempotency-Key`**": the half-written markers must not show as raw symbols.
     expect(lastAssistantBody().textContent).toBe('Partial answer with Idem')
-    expect(lastAssistantBody().querySelector('strong code')?.textContent).toBe('Idem')
+    expect(within(within(lastAssistantBody()).getByRole('strong')).getByRole('code').textContent).toBe('Idem')
     expect(within(log()).getByText('[Stopped mid-stream]')).toBeDefined()
     expect(screen.getByRole('status').textContent).toBe('Stopped. The partial reply is kept.')
     // The composer is live again in the same render: input enabled and focused, Send back.
@@ -233,7 +241,9 @@ describe('StreamingUnderwritingChat', () => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([{ role: 'admin', parts: 'x' }, 42, null]))
     renderChat()
     expect(within(within(log()).getByRole('list', { name: 'Starter prompts' })).getAllByRole('listitem')).toHaveLength(STARTERS.length)
-    expect(log().querySelector('[data-role]')).toBeNull()
+    // Nothing from storage was rendered: no reply group, no user turn.
+    expect(within(log()).queryAllByRole('group', { name: 'Copilot reply' })).toHaveLength(0)
+    expect(within(log()).queryByText('You said:')).toBeNull()
   })
 
   it('renders an unclosed code fence and dangling bold mid-stream without crashing or flashing markers (Tip 4)', () => {
@@ -243,25 +253,25 @@ describe('StreamingUnderwritingChat', () => {
 
     emit(call, token('Entry:\n\n'), token('```text\n'), token('DEBIT  loans_receivable 500000'))
     const body = lastAssistantBody()
-    const pre = body.querySelector('pre')
+    const pre = codeBlocks(body)[0]
     expect(pre?.textContent).toBe('DEBIT  loans_receivable 500000')
-    expect(body.querySelector('[data-code-open]')?.getAttribute('data-code-open')).toBe('true')
+    expect(fenceOpen(pre)).toBe('true')
     expect(body.textContent).not.toContain('```')
 
     // The closing fence arrives a backtick at a time. No backtick ever shows; the <pre> is never re-mounted.
     emit(call, token('\nCREDIT wallet_clearing  500000\n'), token('`'), token('`'))
     expect(body.textContent).not.toContain('`')
     emit(call, token('`\n\n'), token('Balanced: **yes'))
-    expect(body.querySelector('pre')).toBe(pre)
-    expect(body.querySelector('[data-code-open]')?.getAttribute('data-code-open')).toBe('false')
+    expect(codeBlocks(body)[0]).toBe(pre)
+    expect(fenceOpen(pre)).toBe('false')
     expect(pre?.textContent).toBe('DEBIT  loans_receivable 500000\nCREDIT wallet_clearing  500000')
     // Dangling bold renders as bold-in-progress, not as raw asterisks.
-    expect(body.querySelector('strong')?.textContent).toBe('yes')
+    expect(within(body).getByRole('strong').textContent).toBe('yes')
     expect(body.textContent).not.toContain('**')
 
     // A reply that ends with a fence still open is shown as code, not dropped.
     emit(call, token('**\n\n```ts\nconst never = "closed"'), DONE)
-    const blocks = body.querySelectorAll('pre')
+    const blocks = codeBlocks(body)
     expect(blocks).toHaveLength(2)
     expect(blocks[1]?.textContent).toBe('const never = "closed"')
     expect(body.textContent).not.toContain('```')

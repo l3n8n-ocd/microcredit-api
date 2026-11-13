@@ -71,7 +71,7 @@ function renderCard(tool: ToolPart, options: { live?: boolean; retryDisabled?: b
       retryDisabled={options.retryDisabled ?? false}
     />,
   )
-  return { onDecision, onRetry, view, card: screen.getByTestId('tool-card') }
+  return { onDecision, onRetry, view, card: screen.getByRole('region', { name: /^Tool call / }) }
 }
 
 beforeEach(() => {
@@ -152,25 +152,42 @@ describe('FE-07 ToolInvocationCard: four states, four different DOMs', () => {
   }
 
   it('each state answers its own question with its own elements and frame', () => {
-    const seen = new Map<ToolState, { html: string; frame: string }>()
+    const frames = new Set<string>()
     for (const [state, tool] of Object.entries(views) as [ToolState, ToolPart][]) {
       const { card } = renderCard(tool, { live: state === 'input-available' })
-      expect(card.dataset.viewState).toBe(state)
-      expect(card.querySelector(`[data-view="${state}"]`)).not.toBeNull()
-      seen.set(state, { html: card.innerHTML, frame: card.className })
+      // The region's accessible name carries the state.
+      expect(screen.getByRole('region', { name: `Tool call evaluateBorrowerTrustScore: ${state}` })).toBe(card)
+      const ui = within(card)
+      switch (state) {
+        case 'input-streaming': {
+          expect(ui.getByText('Choosing tool')).toBeDefined()
+          const pills = ui.getAllByRole('listitem').map((pill) => pill.textContent ?? '')
+          expect(pills.some((text) => text.includes('(received)'))).toBe(true)
+          expect(pills.some((text) => text.includes('(arriving)'))).toBe(true)
+          expect(pills.some((text) => text.includes('(waiting)'))).toBe(true)
+          expect(ui.queryByRole('img')).toBeNull()
+          break
+        }
+        case 'input-available':
+          expect(ui.getByText('Inputs locked')).toBeDefined()
+          expect(ui.getByText('running on the server')).toBeDefined()
+          expect(ui.queryByText('Choosing tool')).toBeNull()
+          break
+        case 'output-available':
+          expect(ui.getByRole('img', { name: 'Trust score breakdown, 3 pillars' })).toBeDefined()
+          expect(ui.queryByText('Inputs locked')).toBeNull()
+          break
+        case 'output-error':
+          expect(ui.getByText('ERR_TOOL_SCHEMA_BOUNDS')).toBeDefined()
+          expect(ui.getByRole('button', { name: 'Retry Tool Call with Sanitized Inputs' })).toBeDefined()
+          break
+      }
+      // Compared to each other, not to a class name: renaming a Tailwind class cannot break this.
+      frames.add(card.className)
       cleanup()
     }
-    const streaming = seen.get('input-streaming')?.html ?? ''
-    expect(streaming).toContain('Choosing tool')
-    expect(streaming).toContain('data-arg-state="done"')
-    expect(streaming).toContain('data-arg-state="writing"')
-    expect(streaming).toContain('data-arg-state="pending"')
-    expect(seen.get('input-available')?.html).toContain('Inputs locked')
-    expect(seen.get('input-available')?.html).toContain('data-testid="tool-running"')
-    expect(seen.get('output-available')?.html).toContain('data-testid="pillar-chart"')
-    expect(seen.get('output-error')?.html).toContain('ERR_TOOL_SCHEMA_BOUNDS')
     // Four different frames, not one card with a swapped badge.
-    expect(new Set([...seen.values()].map((entry) => entry.frame)).size).toBe(4)
+    expect(frames.size).toBe(4)
   })
 
   it('input-available shows the inputs in plain words, and the optional field as a fallback', () => {
@@ -185,8 +202,15 @@ describe('FE-07 ToolInvocationCard: four states, four different DOMs', () => {
     const { card } = renderCard(views['output-available'])
     const chart = within(card).getByRole('img', { name: /Trust score breakdown/ })
     expect(chart.tagName.toLowerCase()).toBe('svg')
-    expect([...chart.querySelectorAll('[data-points]')].map((bar) => bar.getAttribute('data-points'))).toEqual(['322', '262', '214'])
-    expect(within(card).getByTestId('tool-score').textContent).toContain('798')
+    // The bar values are the chart's accessible description, so a screen reader gets the same numbers.
+    expect(
+      within(card).getByRole('img', {
+        name: 'Trust score breakdown, 3 pillars',
+        description: 'Utility consistency 322 of 350 points; Supplier history 262 of 350 points; GCash cadence 214 of 300 points',
+      }),
+    ).toBe(chart)
+    expect(within(card).getByText('LOW_RISK')).toBeDefined()
+    expect(within(card).getByText(/^798/)).toBeDefined()
     expect(card.textContent).toContain('₱25,000.00')
     expect(card.textContent).toContain('WITHIN_LIMIT')
     expect(card.textContent).not.toMatch(/[{}]"/)
@@ -194,24 +218,25 @@ describe('FE-07 ToolInvocationCard: four states, four different DOMs', () => {
 
   it('shows the fallback badge when requestedCentavos was omitted', () => {
     renderCard(part({ toolName: 'evaluateBorrowerTrustScore', state: 'output-available', input: TRUST_INPUT, output: evaluateBorrowerTrustScore(TRUST_INPUT) }))
-    expect(screen.getByTestId('fallback-badge').textContent).toContain('no amount requested')
+    expect(screen.getByText('Fallback: no amount requested, showing the recommended limit only')).toBeDefined()
   })
 
   it('ledger output draws the double-entry findings table and the replay result', async () => {
     const output = await verifyLedgerAndIdempotency({ loanId: 'L-1042', disbursementCentavos: 500_000, walletProvider: 'GCash', idempotencyKey: KEY, expectedVersion: 3 })
     const { card } = renderCard(part({ toolName: 'verifyLedgerAndIdempotency', state: 'output-available', output }))
-    const table = within(card).getByTestId('ledger-findings')
+    const table = within(card).getByRole('table', { name: /^Journal entry posted by the dry run/ })
     expect(within(table).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Account', 'Debit (centavos)', 'Credit (centavos)'])
     expect(within(table).getByText('loans_receivable:borrower-42')).toBeDefined()
-    expect(within(card).getByTestId('invariant').textContent).toContain('✓ Balanced: ₱5,000.00')
-    expect(within(card).getByTestId('idempotency-findings').textContent).toContain('201 REPLAYED')
-    expect(within(card).getByTestId('idempotency-status').textContent).toBe('NEW_INTENT_POSTED_ONCE')
+    expect(within(card).getByText('✓ Balanced: ₱5,000.00 on each side.')).toBeDefined()
+    const retries = within(card).getByRole('table', { name: /^Same request sent twice/ })
+    expect(within(retries).getByRole('row', { name: /^Retry, same key/ }).textContent).toContain('201 REPLAYED')
+    expect(within(card).getByText('NEW_INTENT_POSTED_ONCE')).toBeDefined()
   })
 
   it('a result that does not match its output schema is not drawn', () => {
     renderCard(part({ toolName: 'evaluateBorrowerTrustScore', state: 'output-available', output: { score: 'high' } }))
     expect(screen.getByRole('alert').textContent).toContain('ERR_TOOL_OUTPUT_SHAPE')
-    expect(screen.queryByTestId('pillar-chart')).toBeNull()
+    expect(screen.queryByRole('img')).toBeNull()
   })
 
   it('the inspector pins any reached state, and an unreached one is disabled', () => {
@@ -219,11 +244,13 @@ describe('FE-07 ToolInvocationCard: four states, four different DOMs', () => {
     const inspector = within(card).getByRole('group', { name: 'Tool Lifecycle State Inspector' })
     expect(within(inspector).getByRole('button', { name: /output-error/ })).toHaveProperty('disabled', true)
     fireEvent.click(within(inspector).getByRole('button', { name: /input-streaming/ }))
-    expect(card.dataset.viewState).toBe('input-streaming')
-    expect(card.dataset.toolState).toBe('output-available')
+    // Pinned: the past view shows, while the call itself is still output-available.
+    expect(within(card).getByText('Choosing tool')).toBeDefined()
+    expect(within(card).queryByRole('img')).toBeNull()
+    expect(card.getAttribute('aria-label')).toBe('Tool call evaluateBorrowerTrustScore: output-available')
     expect(within(inspector).getByRole('button', { name: /input-streaming/ }).getAttribute('aria-pressed')).toBe('true')
     fireEvent.click(within(inspector).getByRole('button', { name: 'live' }))
-    expect(card.dataset.viewState).toBe('output-available')
+    expect(within(card).getByRole('img', { name: 'Trust score breakdown, 3 pillars' })).toBeDefined()
   })
 })
 
@@ -260,7 +287,7 @@ describe('FE-07 human in the loop: proposeDisbursementExecution', () => {
 
     const second = vi.fn<(decision: ToolDecision) => void>()
     render(<ToolInvocationCard part={part({ toolName: 'proposeDisbursementExecution', state: 'output-available', output, decision })} live={false} onDecision={second} onRetry={() => {}} retryDisabled={false} />)
-    expect(screen.getByTestId('payout-receipt').textContent).toContain('201 CREATED')
+    expect(screen.getByRole('status').textContent).toContain('201 CREATED')
     expect(screen.queryByRole('button', { name: 'Approve & Execute Payout' })).toBeNull()
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Re-send the same request (replay test)' }))
@@ -289,7 +316,7 @@ describe('FE-07 output-error recovery', () => {
 
   it('keeps the inputs, flags the bad one, and retries with only that field fixed', () => {
     const { onRetry, card } = renderCard(failed)
-    expect(within(card).getByTestId('tool-error-code').textContent).toBe('ERR_TOOL_SCHEMA_BOUNDS')
+    expect(within(card).getByText('ERR_TOOL_SCHEMA_BOUNDS')).toBeDefined()
     expect(card.textContent).toContain('-500000 centavos')
     expect(card.textContent).toContain('out of bounds')
     expect(card.textContent).toContain('requestedCentavos: -500000 → (removed)')
@@ -334,16 +361,19 @@ describe('FE-07 in the chat', () => {
     fireEvent.click(within(screen.getByRole('list', { name: 'Tool demos' })).getByRole('button', { name: 'Run Trust Score Tool (Chart)' }))
     const call = calls[0]
     emit(call, { type: 'tool-input-start', toolCallId: 'c1', toolName: 'evaluateBorrowerTrustScore', rationale: 'Asked for a score.' })
-    expect(screen.getByTestId('tool-card').dataset.toolState).toBe('input-streaming')
+    expect(screen.getByRole('region', { name: 'Tool call evaluateBorrowerTrustScore: input-streaming' })).toBeDefined()
     emit(call, { type: 'tool-input-delta', toolCallId: 'c1', delta: '{"borrowerName":"Nena\'s Sari-Sari Store",' })
-    expect(screen.getByTestId('tool-card').querySelector('[data-arg="borrowerName"]')?.getAttribute('data-arg-state')).toBe('done')
+    const borrowerPill = within(screen.getByRole('list', { name: 'Arguments so far' }))
+      .getAllByRole('listitem')
+      .find((pill) => (pill.textContent ?? '').startsWith('Borrower'))
+    expect(borrowerPill?.textContent).toContain('(received)')
     emit(call, { type: 'tool-input-available', toolCallId: 'c1', toolName: 'evaluateBorrowerTrustScore', input: TRUST_INPUT })
-    expect(screen.getByTestId('tool-card').dataset.toolState).toBe('input-available')
+    expect(screen.getByRole('region', { name: 'Tool call evaluateBorrowerTrustScore: input-available' })).toBeDefined()
     emit(call, { type: 'tool-output-available', toolCallId: 'c1', output: evaluateBorrowerTrustScore(TRUST_INPUT) })
     emit(call, { type: 'token', text: 'Nena scores 798.' }, { type: 'done', finishReason: 'stop' })
-    expect(screen.getAllByTestId('tool-card')).toHaveLength(1)
-    expect(screen.getByTestId('tool-card').dataset.toolState).toBe('output-available')
-    const body = screen.getAllByTestId('assistant-body').at(-1)
+    expect(screen.getAllByRole('region', { name: /^Tool call / })).toHaveLength(1)
+    expect(screen.getByRole('region', { name: 'Tool call evaluateBorrowerTrustScore: output-available' })).toBeDefined()
+    const body = screen.getAllByRole('group', { name: 'Copilot reply' }).at(-1)
     expect(body?.textContent?.indexOf('798 / 1000')).toBeLessThan(body?.textContent?.indexOf('Nena scores 798.') ?? -1)
   })
 

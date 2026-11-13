@@ -24,7 +24,7 @@ export default function HealthLoading() {
       </div>
 
       <h2 className="mt-8 text-lg font-semibold">Domain invariant verification</h2>
-      <table className="mt-3 w-full text-left text-sm" data-testid="ledger-row-skeletons">
+      <table className="mt-3 w-full text-left text-sm">
         <thead className="text-slate-500">
           <tr>
             <th className="py-1 pr-3">Check</th>

@@ -79,7 +79,7 @@ try {
 
     await page.getByRole('button', { name: BUTTONS[1] }).click()
     await page.getByText(/201 Idempotent replay/).first().waitFor()
-    const entries = await page.getByTestId('request-log-entry').allInnerTexts()
+    const entries = await page.getByRole('region', { name: 'Request log' }).getByRole('listitem').allInnerTexts()
     const created = entries.filter((t) => t.includes('201 Created')).length
     const replayed = entries.filter((t) => t.includes('201 Idempotent replay')).length
     const ok = created === 1 && replayed === 1
@@ -122,14 +122,16 @@ try {
     await page.goto(`${BASE}/underwriting`, { waitUntil: 'networkidle' })
     const chat = page.locator('#copilot')
     const log = chat.getByRole('log')
-    const lastBody = chat.getByTestId('assistant-body').last()
+    const lastBody = chat.getByRole('group', { name: 'Copilot reply' }).last()
+    /** Turns on screen, as a screen reader meets them: "Copilot reply" groups plus "You said:" cues. */
+    const turns = async () => (await chat.getByRole('group', { name: 'Copilot reply' }).count()) + (await chat.getByText('You said:').count())
     const bodyLength = async () => (await lastBody.innerText()).length
 
     // 3a. Thinking shows inside the bubble, then tokens arrive one by one.
     await chat.getByRole('button', { name: 'Walk the 10 loan states' }).click()
-    await chat.getByTestId('thinking-indicator').waitFor()
-    check(await lastBody.getByTestId('thinking-indicator').isVisible(), 'thinking indicator is inside the assistant bubble')
-    await chat.getByTestId('thinking-indicator').waitFor({ state: 'detached' })
+    await chat.getByText('Thinking…').waitFor()
+    check(await lastBody.getByText('Thinking…').isVisible(), 'thinking indicator is inside the assistant bubble')
+    await chat.getByText('Thinking…').waitFor({ state: 'detached' })
     const lengths = new Set()
     for (let sample = 0; sample < 12; sample += 1) {
       lengths.add(await bodyLength())
@@ -195,11 +197,11 @@ try {
 
     // 3g. Reload: the conversation comes back from localStorage. Clear removes it.
     await page.reload({ waitUntil: 'networkidle' })
-    const restored = await chat.locator('[data-role]').count()
+    const restored = await turns()
     check(restored === 8, `conversation restored after reload (${restored} of 8 messages)`)
     await chat.getByRole('button', { name: 'Clear conversation' }).click()
     const stored = await page.evaluate(() => window.localStorage.getItem('microcredit_ai_copilot_v1'))
-    check((await chat.locator('[data-role]').count()) === 0 && stored === null, 'Clear conversation empties the chat and the storage key')
+    check((await turns()) === 0 && stored === null, 'Clear conversation empties the chat and the storage key')
     await page.close()
   }
 

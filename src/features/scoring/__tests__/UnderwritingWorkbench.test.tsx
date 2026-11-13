@@ -55,6 +55,17 @@ function describedText(field: HTMLElement): string {
     .join(' ')
 }
 
+/** A polite live region (an ARIA attribute, not a test id) whose text starts with `prefix`. */
+function liveRegion(ui: Ui, prefix: string): HTMLElement {
+  return ui.getByText((_, element) => element?.getAttribute('aria-live') === 'polite' && (element.textContent ?? '').startsWith(prefix))
+}
+
+/** The value next to a `<dt>` term in a description list. */
+function definitionOf(ui: Ui, term: string): string {
+  const dt = ui.getAllByRole('term').find((candidate) => candidate.textContent === term)
+  return dt?.nextElementSibling?.textContent ?? ''
+}
+
 describe('UnderwritingWorkbench: every control is labelled and described (CLAUDE.md §11 rule 1)', () => {
   it('binds the search box, all 8 state radios and the 3 repayment controls', () => {
     const { ui } = setup()
@@ -117,7 +128,7 @@ describe('UnderwritingWorkbench: review decisions carry Idempotency-Key + If-Mat
     fireEvent.click(ui.getByRole('button', { name: 'Review L-1044' }))
     const heading = ui.getByRole('heading', { level: 3, name: /L-1044/ })
     expect(document.activeElement).toBe(heading)
-    const score = ui.getByTestId('trust-score')
+    const score = liveRegion(ui, 'Trust score')
     expect(score.getAttribute('aria-live')).toBe('polite')
     expect(score.textContent).toBe('Trust score 702 / 1000 · LOW risk')
     expect(ui.getByText('UTIL_LATE_PAYMENTS')).toBeDefined()
@@ -219,8 +230,8 @@ describe('RepaymentPanel: centavo split, ledger invariant and reversal guard', (
     const { ui } = setup(server)
     fireEvent.change(ui.getByLabelText('Loan to repay'), { target: { value: 'L-1042' } })
     fireEvent.change(ui.getByLabelText('Repayment amount (PHP)'), { target: { value: '1,000.00' } })
-    expect(ui.getByTestId('split-principal').textContent).toBe('₱952.39')
-    expect(ui.getByTestId('split-interest').textContent).toBe('₱47.61')
+    expect(definitionOf(ui, 'Principal')).toBe('₱952.39')
+    expect(definitionOf(ui, 'Interest')).toBe('₱47.61')
 
     fireEvent.click(ui.getByRole('button', { name: 'Post repayment' }))
     await waitFor(() => {
@@ -229,7 +240,7 @@ describe('RepaymentPanel: centavo split, ledger invariant and reversal guard', (
     const repayment = server.getLedger().find((entry) => entry.kind === 'REPAYMENT')
     expect(repayment?.lines.map((line) => line.amount)).toEqual([100_000, 95_239, 4_761])
     expect(journalTotals(server.getLedger().flatMap((entry) => entry.lines))).toMatchObject({ balanced: true })
-    const assertion = ui.getByTestId('ledger-assertion')
+    const assertion = liveRegion(ui, 'Ledger: Σ debits')
     expect(assertion.getAttribute('aria-live')).toBe('polite')
     expect(assertion.textContent).toBe('Ledger: Σ debits ₱6,000.00 === Σ credits ₱6,000.00 (balanced, 2 entries)')
   })

@@ -528,14 +528,15 @@ describe('NOTES.md gaps, pinned as tests', () => {
 
     const handBuilt = render(<Page><DisbursementOverrideModal /></Page>)
     await openWithKeyboard(user, HAND_BUILT_TRIGGER)
-    await user.click(screen.getByTestId('modal-backdrop'))
+    // The backdrop has no role of its own: it is the element that holds the dialog.
+    await user.click(screen.getByRole('dialog').parentElement ?? document.body)
     expect(screen.getByRole('dialog')).toBeDefined() // no outside-press dismissal at all
     handBuilt.unmount()
 
     render(<Page><ShadcnOverrideDialog /></Page>)
     await openWithKeyboard(user, SHADCN_TRIGGER)
-    await screen.findByRole('dialog')
-    const overlay = document.querySelector('[data-slot="dialog-overlay"]')
+    // The overlay has no role: it is rendered right before the dialog, in the same portal.
+    const overlay = (await screen.findByRole('dialog')).previousElementSibling
     if (overlay === null) throw new Error('overlay not rendered')
     // Radix attaches its document listener on the next tick.
     await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
@@ -630,7 +631,7 @@ describe('NOTES.md gaps, pinned as tests', () => {
       return (
         <Dialog>
           <DialogTrigger asChild>
-            <button type="button" ref={ref} onClick={onClick} data-testid="mine" className="my-own-class">
+            <button type="button" ref={ref} onClick={onClick} className="my-own-class">
               Open composed dialog
             </button>
           </DialogTrigger>
@@ -646,7 +647,7 @@ describe('NOTES.md gaps, pinned as tests', () => {
     }
     const user = userEvent.setup()
     render(<Composed />)
-    const trigger = screen.getByTestId('mine')
+    const trigger = screen.getByRole('button', { name: 'Open composed dialog' })
 
     // One DOM node: ours. Radix added its attributes to it instead of wrapping it.
     expect(trigger.tagName).toBe('BUTTON')

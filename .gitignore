@@ -65,3 +65,7 @@ desktop.ini
 .sentinel-cache/
 docs/drafts/*
 !docs/drafts/latest-triage-brief.md
+
+# Playwright output (FE-09)
+/test-results/
+/playwright-report/

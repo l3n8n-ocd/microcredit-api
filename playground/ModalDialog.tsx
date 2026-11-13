@@ -135,7 +135,7 @@ export function ModalDialog({
 
   return (
     // The backdrop only dims the page. It is not a button and does not close the dialog.
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4" data-testid="modal-backdrop">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4">
       <div
         ref={dialogRef}
         role="dialog"

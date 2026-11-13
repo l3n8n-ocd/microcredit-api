@@ -51,12 +51,13 @@ await page.addInitScript(() => {
   window.__cardsBefore = 0
   const watch = () =>
     new MutationObserver(() => {
-      const cards = [...document.querySelectorAll('[data-testid="tool-card"]')]
+      // A tool card is a region named "Tool call <tool>: <state>".
+      const cards = [...document.querySelectorAll('[aria-label^="Tool call "]')]
       // Only a card created after the last reset counts.
       if (cards.length <= window.__cardsBefore) return
-      const state = cards.at(-1)?.getAttribute('data-tool-state')
+      const state = cards.at(-1)?.getAttribute('aria-label')?.split(': ')[1]
       if (state && window.__toolStates.at(-1) !== state) window.__toolStates.push(state)
-    }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-tool-state'] })
+    }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-label'] })
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch, { once: true })
   else watch()
 })
@@ -66,8 +67,8 @@ await page.evaluate(() => localStorage.clear())
 await page.reload({ waitUntil: 'networkidle' })
 await page.locator('#copilot').scrollIntoViewIfNeeded()
 
-const idle = page.locator('button[data-state="send"]')
-const lastCard = () => page.getByTestId('tool-card').last()
+const idle = page.getByRole('button', { name: 'Send' })
+const lastCard = () => page.getByRole('region', { name: /^Tool call / }).last()
 const clear = async () => {
   const button = page.getByRole('button', { name: 'Clear conversation' })
   if (await button.isEnabled()) await button.click()
@@ -76,7 +77,7 @@ const runChip = async (label) => {
   await clear()
   await page.evaluate(() => {
     window.__toolStates = []
-    window.__cardsBefore = document.querySelectorAll('[data-testid="tool-card"]').length
+    window.__cardsBefore = document.querySelectorAll('[aria-label^="Tool call "]').length
   })
   await page.getByRole('list', { name: 'Tool demos' }).getByRole('button', { name: label }).click()
 }
@@ -97,13 +98,22 @@ const shoot = async (name) => {
 
 // 1. Trust score: catch input-streaming live, then the chart.
 await runChip('Run Trust Score Tool (Chart)')
-await page.locator('[data-tool-state="input-streaming"] [data-arg-state="done"]').first().waitFor({ timeout: 10_000 })
+await page
+  .getByRole('region', { name: 'Tool call evaluateBorrowerTrustScore: input-streaming' })
+  .getByRole('list', { name: 'Arguments so far' })
+  .getByText('(received)')
+  .first()
+  .waitFor({ timeout: 10_000 })
 await shoot('fe-07-1-input-streaming.png')
-await page.locator('[data-tool-state="input-available"]').waitFor({ timeout: 10_000 })
+await page.getByRole('region', { name: 'Tool call evaluateBorrowerTrustScore: input-available' }).waitFor({ timeout: 10_000 })
 await shoot('fe-07-2-input-available.png')
 await idle.waitFor({ timeout: 30_000 })
 check((await states()) === 'input-streaming → input-available → output-available', `trust score states: ${await states()}`)
-const bars = await lastCard().locator('svg [data-points]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-points')))
+// The chart's accessible description lists each bar: "Utility consistency 322 of 350 points; …".
+const description = await lastCard()
+  .getByRole('img', { name: 'Trust score breakdown, 3 pillars' })
+  .evaluate((svg) => document.getElementById(svg.getAttribute('aria-describedby') ?? '')?.textContent ?? '')
+const bars = [...description.matchAll(/(\d+) of (\d+) points/g)].map((match) => `${match[1]}/${match[2]}`)
 check(bars.length === 3, `trust score: SVG chart with ${bars.length} bars (${bars.join(', ')})`)
 await shoot('fe-07-3-score-chart.png')
 
@@ -111,21 +121,22 @@ await shoot('fe-07-3-score-chart.png')
 await runChip('Run Ledger Audit Tool (Table)')
 await idle.waitFor({ timeout: 30_000 })
 check((await states()) === 'input-streaming → input-available → output-available', `ledger states: ${await states()}`)
-const findings = await lastCard().getByTestId('idempotency-findings').innerText()
+const findings = await lastCard().getByRole('table', { name: /^Same request sent twice/ }).innerText()
 check(findings.includes('201 CREATED') && findings.includes('201 REPLAYED'), 'ledger: first 201 CREATED, same-key retry 201 REPLAYED')
-check((await lastCard().getByTestId('invariant').innerText()).startsWith('✓ Balanced'), 'ledger: Σ debits === Σ credits')
+check((await lastCard().getByText(/^✓ Balanced/).count()) === 1, 'ledger: Σ debits === Σ credits')
 await shoot('fe-07-4-ledger-table.png')
 
 // 3. Proposal: double-click Approve, then the replay test.
 await runChip('Propose Disbursement (Confirm Tool)')
 await idle.waitFor({ timeout: 30_000 })
 await lastCard().getByRole('button', { name: 'Approve & Execute Payout' }).dblclick()
-const receipt = lastCard().getByTestId('payout-receipt')
+const receipt = lastCard().getByRole('status')
 await receipt.waitFor()
-check((await receipt.innerText()).includes('201 CREATED') && (await receipt.getByTestId('entries-for-loan').innerText()) === '1', 'confirm: double-click paid once (201 CREATED, 1 entry)')
+const receiptText = await receipt.innerText()
+check(receiptText.includes('201 CREATED') && receiptText.includes('disbursement entries for this loan: 1'), 'confirm: double-click paid once (201 CREATED, 1 entry)')
 await lastCard().getByRole('button', { name: 'Re-send the same request (replay test)' }).click()
-await lastCard().getByTestId('replay-result').waitFor()
-const replay = await lastCard().getByTestId('replay-result').innerText()
+await lastCard().getByText(/^Replay 1:/).waitFor()
+const replay = await lastCard().getByText(/^Replay 1:/).innerText()
 check(replay.includes('201 REPLAYED') && replay.includes('still 1'), `confirm: replay test → ${replay}`)
 await shoot('fe-07-5-confirm-payout.png')
 
@@ -133,21 +144,25 @@ await shoot('fe-07-5-confirm-payout.png')
 await runChip('Simulate Tool Error State')
 await idle.waitFor({ timeout: 30_000 })
 check((await states()) === 'input-streaming → input-available → output-error', `error states: ${await states()}`)
-check((await lastCard().getByTestId('tool-error-code').innerText()) === 'ERR_TOOL_SCHEMA_BOUNDS', 'error: ERR_TOOL_SCHEMA_BOUNDS')
+check((await lastCard().getByText('ERR_TOOL_SCHEMA_BOUNDS', { exact: true }).count()) === 1, 'error: ERR_TOOL_SCHEMA_BOUNDS')
 await shoot('fe-07-6-output-error.png')
 await page.evaluate(() => {
   window.__toolStates = []
-  window.__cardsBefore = document.querySelectorAll('[data-testid="tool-card"]').length
+  window.__cardsBefore = document.querySelectorAll('[aria-label^="Tool call "]').length
 })
 await lastCard().getByRole('button', { name: 'Retry Tool Call with Sanitized Inputs' }).click()
 await idle.waitFor({ timeout: 30_000 })
 check((await states()) === 'input-streaming → input-available → output-available', `retry with sanitized inputs: ${await states()}`)
-check((await lastCard().getByTestId('fallback-badge').count()) === 1, 'retry: requestedCentavos removed, fallback badge shown')
+check((await lastCard().getByText(/^Fallback: no amount requested/).count()) === 1, 'retry: requestedCentavos removed, fallback badge shown')
 
 // 5. Inspector: pin the first state of a finished card.
 const inspector = lastCard().getByRole('group', { name: 'Tool Lifecycle State Inspector' })
 await inspector.getByRole('button', { name: /input-streaming/ }).click()
-check((await lastCard().getAttribute('data-view-state')) === 'input-streaming', 'inspector: pinned a past state')
+check(
+  (await inspector.getByRole('button', { name: /input-streaming/ }).getAttribute('aria-pressed')) === 'true' &&
+    (await lastCard().getByText('Choosing tool').isVisible()),
+  'inspector: pinned a past state',
+)
 check(await inspector.getByRole('button', { name: /output-error/ }).isDisabled(), 'inspector: unreached state disabled')
 
 check(consoleErrors.length === 0, `${consoleErrors.length} console errors`)

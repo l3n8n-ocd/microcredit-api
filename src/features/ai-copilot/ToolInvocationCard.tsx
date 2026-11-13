@@ -102,7 +102,7 @@ function StreamingView({ toolName, part }: { readonly toolName: ToolName; readon
   const fields = Object.entries(TOOL_META[toolName].fields)
   const { done, writing } = partialArguments(part.inputText)
   return (
-    <div data-view="input-streaming">
+    <div>
       <p className="text-xs font-semibold tracking-wide text-slate-600 uppercase">Choosing tool</p>
       <p className="mt-1 text-sm text-ink">
         <code className={`${CODE} font-semibold`}>{toolName}</code>: {part.rationale}
@@ -117,13 +117,13 @@ function StreamingView({ toolName, part }: { readonly toolName: ToolName; readon
           return (
             <li
               key={key}
-              data-arg={key}
-              data-arg-state={done.has(key) ? 'done' : isWriting ? 'writing' : 'pending'}
               className={`inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs ${
                 done.has(key) ? 'border-slate-400 bg-white text-ink' : 'border-dashed border-slate-300 text-slate-600'
               }`}
             >
               <span className="font-semibold">{meta.label}</span>
+              {/* Each pill says its own status, so it is not carried by the border style alone. */}
+              <span className="sr-only">{done.has(key) ? '(received)' : isWriting ? '(arriving)' : '(waiting)'}</span>
               {done.has(key) ? (
                 <span className="font-mono">{formatField(meta, value)}</span>
               ) : isWriting ? (
@@ -169,11 +169,11 @@ function ParameterBar({ toolName, input }: { readonly toolName: ToolName; readon
 
 function AvailableView({ toolName, part, live }: { readonly toolName: ToolName; readonly part: ToolPart; readonly live: boolean }) {
   return (
-    <div data-view="input-available">
+    <div>
       <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-slate-600 uppercase">
         <span aria-hidden="true">🔒</span> Inputs locked
         {live && (
-          <span className="ml-auto inline-flex items-center gap-1.5 font-normal tracking-normal normal-case" data-testid="tool-running">
+          <span className="ml-auto inline-flex items-center gap-1.5 font-normal tracking-normal normal-case">
             <span aria-hidden="true" className="inline-flex items-center gap-1">
               <span className="copilot-dot" />
               <span className="copilot-dot" />
@@ -203,19 +203,19 @@ function PillarChart({ result }: { readonly result: TrustScoreOutput }) {
   const summary = result.pillars.map((pillar) => `${pillar.label} ${pillar.points} of ${pillar.maxPoints} points`).join('; ')
   return (
     <figure className="mt-3">
-      <svg viewBox="0 0 320 102" className="w-full max-w-md" role="img" aria-labelledby={`${id}-title ${id}-desc`} data-testid="pillar-chart">
+      <svg viewBox="0 0 320 102" className="w-full max-w-md" role="img" aria-labelledby={`${id}-title`} aria-describedby={`${id}-desc`}>
         <title id={`${id}-title`}>Trust score breakdown, 3 pillars</title>
         <desc id={`${id}-desc`}>{summary}</desc>
         {result.pillars.map((pillar, row) => {
           const y = row * 34
           const width = pillar.maxPoints === 0 ? 0 : (track * pillar.points) / pillar.maxPoints
           return (
-            <g key={pillar.id} data-pillar={pillar.id}>
+            <g key={pillar.id}>
               <text x="0" y={y + 11} className="fill-slate-700 font-sans text-[11px]">
                 {pillar.label} · {pillar.basis}
               </text>
               <rect x="0" y={y + 16} width={track} height="11" rx="2" className="fill-slate-200" />
-              <rect x="0" y={y + 16} width={width} height="11" rx="2" className="fill-slate-700" data-points={pillar.points} />
+              <rect x="0" y={y + 16} width={width} height="11" rx="2" className="fill-slate-700" />
               <text x={track + 8} y={y + 25.5} className="fill-ink font-mono text-[11px]">
                 {pillar.points}/{pillar.maxPoints}
               </text>
@@ -231,11 +231,11 @@ function PillarChart({ result }: { readonly result: TrustScoreOutput }) {
 function TrustScoreResult({ result }: { readonly result: TrustScoreOutput }) {
   const requested = result.requested
   return (
-    <div data-result="trust-score">
+    <div>
       <p className="text-sm text-ink">
         <span className="font-semibold">{result.borrowerName}</span> · <span className={CODE}>{result.businessType}</span>
       </p>
-      <p className="mt-1 flex flex-wrap items-baseline gap-x-3" data-testid="tool-score">
+      <p className="mt-1 flex flex-wrap items-baseline gap-x-3">
         <span className="font-mono text-2xl font-semibold text-ink">
           {result.score} <span className="text-base text-slate-600">/ {result.maxScore}</span>
         </span>
@@ -251,7 +251,7 @@ function TrustScoreResult({ result }: { readonly result: TrustScoreOutput }) {
         <dt className="text-slate-600">Requested</dt>
         <dd>
           {requested === null ? (
-            <span className="rounded border border-slate-300 bg-canvas px-1.5 py-0.5 text-xs text-slate-700" data-testid="fallback-badge">
+            <span className="rounded border border-slate-300 bg-canvas px-1.5 py-0.5 text-xs text-slate-700">
               Fallback: no amount requested, showing the recommended limit only
             </span>
           ) : (
@@ -282,7 +282,7 @@ function JournalTable({ caption, lines, debits, credits }: { readonly caption: s
   const balanced = debits === credits
   return (
     <div className="mt-2 overflow-x-auto">
-      <table className="w-full min-w-[20rem] text-left text-xs" data-testid="ledger-findings">
+      <table className="w-full min-w-[20rem] text-left text-xs">
         <caption className="pb-1 text-left text-xs text-slate-600">{caption}</caption>
         <thead className="text-slate-600">
           <tr>
@@ -316,7 +316,7 @@ function JournalTable({ caption, lines, debits, credits }: { readonly caption: s
           </tr>
         </tfoot>
       </table>
-      <p className={`mt-1 text-xs font-semibold ${balanced ? 'text-emerald-800' : 'text-rose-800'}`} data-testid="invariant">
+      <p className={`mt-1 text-xs font-semibold ${balanced ? 'text-emerald-800' : 'text-rose-800'}`}>
         {balanced ? `✓ Balanced: ${peso(debits)} on each side.` : `✗ Unbalanced: ${peso(debits)} vs ${peso(credits)}.`}
       </p>
     </div>
@@ -332,13 +332,13 @@ function LedgerFindings({ result }: { readonly result: LedgerOutput }) {
         : 'Nothing posted.'
   const ok = (status: number): string => (status === 201 ? 'text-emerald-800' : 'text-rose-800')
   return (
-    <div data-result="ledger">
+    <div>
       <p className="text-sm text-ink">
         <span className="font-mono">{result.loanId}</span>: <span className={CODE}>{result.stateBefore} v{result.versionBefore}</span> →{' '}
         <span className={CODE}>{result.stateAfter} v{result.versionAfter}</span>
       </p>
       <JournalTable caption={caption} lines={result.journalLines} debits={result.debitsCentavos} credits={result.creditsCentavos} />
-      <table className="mt-3 w-full text-left text-xs" data-testid="idempotency-findings">
+      <table className="mt-3 w-full text-left text-xs">
         <caption className="pb-1 text-left text-xs text-slate-600">
           Same request sent twice: <code className={CODE}>Idempotency-Key: {result.idempotencyKey.slice(0, 8)}…</code>,{' '}
           <code className={CODE}>If-Match: {result.ifMatch}</code>
@@ -360,7 +360,7 @@ function LedgerFindings({ result }: { readonly result: LedgerOutput }) {
         </tbody>
       </table>
       <p className="mt-1 font-mono text-xs text-ink">
-        Idempotency-Key status: <span data-testid="idempotency-status">{result.idempotencyStatus}</span>
+        Idempotency-Key status: <span>{result.idempotencyStatus}</span>
       </p>
     </div>
   )
@@ -393,7 +393,7 @@ function ProposalConfirm({
 
   const button = `min-h-11 rounded-md border px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`
   return (
-    <div data-result="proposal">
+    <div>
       <p className="text-sm font-semibold text-ink">
         Pay {peso(proposal.amountCentavos)} to {proposal.borrowerName}?
       </p>
@@ -441,14 +441,14 @@ function ProposalConfirm({
           Cancelled by the officer. No request was sent; the loan stays {proposal.fromState}.
         </p>
       ) : (
-        <div className="mt-3 rounded-md border border-slate-300 bg-canvas px-3 py-2 text-sm text-ink" role="status" data-testid="payout-receipt">
+        <div className="mt-3 rounded-md border border-slate-300 bg-canvas px-3 py-2 text-sm text-ink" role="status">
           <p className={`font-mono font-semibold ${decision.status === 201 ? 'text-emerald-800' : 'text-rose-800'}`}>
             {decision.status === 201 ? '✓' : '✗'} {decision.status} {decision.outcome}
           </p>
           <p className="mt-1">{decision.message}</p>
           <p className="mt-1 font-mono text-xs">
             {proposal.loanId}: {decision.loanStatus ?? '?'} v{decision.loanVersion ?? '?'} · disbursement entries for this loan:{' '}
-            <span data-testid="entries-for-loan">{decision.entriesForLoan}</span>
+            <span>{decision.entriesForLoan}</span>
             {decision.debitsCentavos !== null && decision.creditsCentavos !== null && (
               <> · Σ debits {decision.debitsCentavos} {decision.debitsCentavos === decision.creditsCentavos ? '===' : '!=='} Σ credits {decision.creditsCentavos}</>
             )}
@@ -465,7 +465,7 @@ function ProposalConfirm({
                 {busy ? 'Re-sending…' : 'Re-send the same request (replay test)'}
               </button>
               {decision.lastReplay !== null && (
-                <p className="mt-1 font-mono text-xs" data-testid="replay-result">
+                <p className="mt-1 font-mono text-xs">
                   Replay {decision.replays}: {decision.lastReplay}. Entries for {proposal.loanId} still {decision.entriesForLoan}.
                 </p>
               )}
@@ -505,7 +505,7 @@ function OutputView({
     }
   }
   return (
-    <div data-view="output-available">
+    <div>
       {body ?? (
         <p className="text-sm text-rose-800" role="alert">
           <span className="font-mono font-semibold">ERR_TOOL_OUTPUT_SHAPE</span>: the result did not match the{' '}
@@ -536,9 +536,9 @@ function ErrorView({
   const changes = sanitized.changes.map((change) => `${change.field}: ${String(change.from)} → ${String(change.to)}`)
   const disabled = retryDisabled || !sanitized.fixable
   return (
-    <div data-view="output-error">
+    <div>
       <p className="text-xs font-semibold tracking-wide text-rose-800 uppercase">Tool failed · nothing was posted</p>
-      <p className="mt-1 font-mono text-sm font-semibold text-ink" data-testid="tool-error-code">
+      <p className="mt-1 font-mono text-sm font-semibold text-ink">
         {code}
       </p>
       <p className="mt-1 text-sm text-ink">{part.errorText ?? 'The tool did not return a result.'}</p>
@@ -631,10 +631,10 @@ export function ToolInvocationCard({ part, live, onDecision, onRetry, retryDisab
   return (
     <section
       aria-label={`Tool call ${toolName}: ${part.state}`}
-      data-testid="tool-card"
-      data-tool={toolName}
+     
+     
       data-tool-state={part.state}
-      data-view-state={view}
+     
       className={`my-2 rounded-lg p-3 text-sm ${FRAME[view]}`}
     >
       <header className="mb-2 flex flex-wrap items-center justify-between gap-2">

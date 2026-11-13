@@ -36,7 +36,8 @@ function BlockView({ block }: { readonly block: Block }) {
   switch (block.type) {
     case 'code':
       return (
-        <div className="overflow-hidden rounded-md border border-main bg-main" data-code-open={block.open ? 'true' : 'false'}>
+        // aria-busy: the fence is still open, so this block is still being written.
+        <div className="overflow-hidden rounded-md border border-main bg-main" aria-busy={block.open ? 'true' : 'false'}>
           {block.lang !== '' && (
             <div className="border-b border-slate-600 px-3 py-1 font-mono text-xs text-slate-300">{block.lang}</div>
           )}

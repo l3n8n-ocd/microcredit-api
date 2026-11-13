@@ -54,7 +54,7 @@ export function RouteErrorPanel({ error, retry, boundary, title }: RouteErrorPan
       <section aria-labelledby="route-error-title" className="rounded-lg border border-main bg-white p-5 text-ink">
         <p className="font-mono text-xs text-slate-600">
           <span aria-hidden="true" className="mr-1.5 inline-block size-2 rounded-full bg-main align-middle" />
-          error boundary: <span data-testid="route-error-boundary">{boundary}</span>
+          error boundary: <span>{boundary}</span>
         </p>
         <h1
           id="route-error-title"
@@ -71,7 +71,7 @@ export function RouteErrorPanel({ error, retry, boundary, title }: RouteErrorPan
         {message !== null && message !== '' && <p className="mt-2 text-sm text-slate-700">{message}</p>}
         <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-md border border-slate-200 bg-canvas p-3 font-mono text-xs">
           <dt className="text-slate-600">code</dt>
-          <dd data-testid="route-error-code" className="break-all">
+          <dd className="break-all">
             {code}
           </dd>
           <dt className="text-slate-600">type</dt>

@@ -1,9 +1,13 @@
 name: CI
 
+# Every push to main and every pull request runs the same gates, in order.
+# Any failing step fails the run. To block merging on it, require the
+# "Typecheck · Lint · Test · Build · E2E" check in the branch protection rule for main.
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
@@ -14,7 +18,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck · Lint · Test · Build · Fold
+    name: Typecheck · Lint · Test · Build · E2E
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,13 +27,21 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
+
+      - name: Typecheck (tsc --noEmit, strict)
+        run: npm run typecheck
+      - name: Lint (oxlint, warnings fail)
+        run: npm run lint
+      - name: Vitest unit + component suite (RTL, /api/chat mocked)
+        run: npm test
+      - name: Next.js production build
+        run: npm run build
+
       - name: Install Chromium and Roboto (the font Android phones render)
         run: |
           npx playwright install --with-deps chromium
           sudo apt-get install -y --no-install-recommends fonts-roboto
-      - name: "Above-the-fold + 5-route responsiveness (Playwright at 375px and 1280px)"
+      - name: "Playwright E2E: primary flow (e2e/primary-flow.spec.ts)"
         run: npm run test:e2e
+      - name: "Above-the-fold, 8-route responsiveness and copilot streaming checks (e2e/fold.mjs)"
+        run: npm run test:e2e:fold

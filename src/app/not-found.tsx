@@ -9,7 +9,7 @@ export default function NotFound() {
       <section aria-labelledby="not-found-title" className="rounded-lg border border-main bg-white p-5 text-ink">
         <p className="font-mono text-xs text-slate-600">
           <span aria-hidden="true" className="mr-1.5 inline-block size-2 rounded-full bg-main align-middle" />
-          code <span data-testid="not-found-code">HTTP_404</span>
+          code <span>HTTP_404</span>
         </p>
         <h1 id="not-found-title" className="mt-2 text-2xl font-bold tracking-tight">
           No page at this address.

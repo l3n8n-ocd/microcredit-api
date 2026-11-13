@@ -19,7 +19,7 @@ export default function UnderwritingLoading() {
         <span className="block h-4 w-2/3 rounded bg-slate-200" />
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="score-card-skeletons">
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[0, 1, 2, 3].map((index) => (
           <SkeletonCard key={index} variant="score-card" />
         ))}

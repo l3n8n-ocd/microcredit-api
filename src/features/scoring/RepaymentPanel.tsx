@@ -154,7 +154,7 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
           DEBIT <code>wallet_clearing</code>, CREDIT <code>loans_receivable</code> + <code>interest_income</code>. Σ
           debits === Σ credits on every entry.
         </p>
-        <p aria-live="polite" data-testid="ledger-assertion" className="text-sm font-mono">
+        <p aria-live="polite" className="text-sm font-mono">
           Ledger: Σ debits {formatPHP(totals.debits)} {totals.balanced ? '===' : '!=='} Σ credits{' '}
           {formatPHP(totals.credits)} ({totals.balanced ? 'balanced' : 'UNBALANCED'}, {ledger.length}{' '}
           {ledger.length === 1 ? 'entry' : 'entries'})
@@ -237,11 +237,11 @@ export function RepaymentPanel({ loans, ledger, inFlight, createKey, send, onAnn
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
           <dt className="text-slate-300">Principal</dt>
-          <dd data-testid="split-principal" className="text-right font-mono">
+          <dd className="text-right font-mono">
             {preview === null ? '—' : formatPHP(preview.principal)}
           </dd>
           <dt className="text-slate-300">Interest</dt>
-          <dd data-testid="split-interest" className="text-right font-mono">
+          <dd className="text-right font-mono">
             {preview === null ? '—' : formatPHP(preview.interest)}
           </dd>
           <dt className="text-slate-300">If-Match</dt>

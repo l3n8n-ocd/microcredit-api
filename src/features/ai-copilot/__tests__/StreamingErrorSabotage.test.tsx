@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDisbursementServer, SEED_LOANS } from '../../disbursement/index.ts'
 import { UnderwritingWorkbench } from '../../scoring/UnderwritingWorkbench.tsx'
 import { RouteErrorPanel } from '../../../components/RouteErrorPanel.tsx'
+import { CHAT_TURN_RESERVE } from '../../../components/ui/SkeletonCard.tsx'
 import { SABOTAGE_MODES, type ChatStreamEvent, type SabotageMode, type WireMessage } from '../chatProtocol.ts'
 import { ChatRequestError, fetchChatTransport, parseRetryAfter, type ChatTransport } from '../chatTransport.ts'
 import type { StarterPrompt } from '../chatTypes.ts'
@@ -57,7 +58,19 @@ function renderChat() {
 
 const input = (): HTMLTextAreaElement => screen.getByLabelText<HTMLTextAreaElement>('Ask the copilot')
 const log = (): HTMLElement => screen.getByRole('log', { name: 'Conversation' })
-const banner = (): HTMLElement => screen.getByTestId('failure-banner')
+/** The failure banner is the chat's one `role="alert"`. */
+const banner = (): HTMLElement => screen.getByRole('alert')
+const reply = (): HTMLElement => screen.getAllByRole('group', { name: 'Copilot reply' }).at(-1) ?? screen.getByRole('log')
+/** Who said each turn, read the way a screen reader hears it: "You said:" or a "Copilot reply" group. */
+const speakers = (): string[] => {
+  const log = within(screen.getByRole('log', { name: 'Conversation' }))
+  // Top-level turns only: items of the conversation's first list, not bullets inside a reply.
+  const turns = log.getAllByRole('list')[0]
+  return log
+    .getAllByRole('listitem')
+    .filter((item) => item.parentElement === turns)
+    .map((item) => (within(item).queryByRole('group', { name: 'Copilot reply' }) === null ? 'user' : 'assistant'))
+}
 const retryButton = (): HTMLButtonElement => within(banner()).getByRole<HTMLButtonElement>('button')
 const token = (text: string): ChatStreamEvent => ({ type: 'token', text })
 const DONE: ChatStreamEvent = { type: 'done', finishReason: 'stop' }
@@ -100,7 +113,7 @@ describe('FE-08 sabotage drills: the chat', () => {
     const { calls } = renderChat()
     send(PROMPT)
     emit(at(calls, 0), { type: 'meta', engine: { kind: 'local', label: 'test engine' } }, token('Trust score '), token('**712 / 1000**'), DONE)
-    expect(screen.queryByTestId('failure-banner')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
     expect(within(log()).getByText('712 / 1000')).toBeDefined()
     expect(consoleError).not.toHaveBeenCalled()
   })
@@ -113,9 +126,9 @@ describe('FE-08 sabotage drills: the chat', () => {
       message: 'Sabotage drill: the stream was cut after 2 tokens. The partial reply is kept.',
     })
 
-    expect(banner().dataset.kind).toBe('mid-stream')
+    expect(banner().textContent).toContain('The reply stopped part-way.')
     expect(banner().textContent).toContain('The partial answer above is kept.')
-    expect(within(banner()).getByTestId('failure-code').textContent).toBe('ERR_MID_STREAM')
+    expect(within(banner()).getByText('ERR_MID_STREAM')).toBeDefined()
     expect(within(log()).getByText('Partial answer about Liza')).toBeDefined()
     expect(retryButton().textContent).toBe('Retry failed prompt: “Evaluate sari-sari store owner Liza\'s trust…”')
     expect(retryButton().title).toBe(PROMPT)
@@ -135,10 +148,10 @@ describe('FE-08 sabotage drills: the chat', () => {
 
     // The banner leaves as soon as the retried reply streams, not only when it finishes.
     emit(at(calls, 1), token('Recovered: 712 / 1000.'))
-    expect(screen.queryByTestId('failure-banner')).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
     emit(at(calls, 1), DONE)
     // The retry replaced the failed reply in place: one question, one answer, nothing wiped.
-    expect(within(log()).getAllByRole('listitem').map((item) => item.dataset.role)).toEqual(['user', 'assistant'])
+    expect(speakers()).toEqual(['user', 'assistant'])
     expect(within(log()).getByText('Recovered: 712 / 1000.')).toBeDefined()
   })
 
@@ -154,9 +167,9 @@ describe('FE-08 sabotage drills: the chat', () => {
         retryAfterSeconds: 2,
       }),
     )
-    expect(banner().dataset.kind).toBe('rate-limit')
+    expect(banner().textContent).toContain('Retry-After')
     expect(banner().textContent).toContain('Rate limit reached (HTTP 429).')
-    expect(within(banner()).getByTestId('failure-code').textContent).toBe('HTTP_429')
+    expect(within(banner()).getByText('HTTP_429')).toBeDefined()
     expect(banner().textContent).toContain('Retry-After: 2 s')
     expect(retryButton().disabled).toBe(true)
 
@@ -178,8 +191,8 @@ describe('FE-08 sabotage drills: the chat', () => {
       at(calls, 0),
       new ChatRequestError('A stream frame was not valid JSON (a tool payload was cut off).', { kind: 'malformed' }),
     )
-    expect(banner().dataset.kind).toBe('malformed')
-    expect(within(banner()).getByTestId('failure-code').textContent).toBe('ERR_MALFORMED_FRAME')
+    expect(banner().textContent).toContain('A reply frame was not valid JSON.')
+    expect(within(banner()).getByText('ERR_MALFORMED_FRAME')).toBeDefined()
     expect(within(log()).getByText('Scoring Liza')).toBeDefined()
   })
 
@@ -201,8 +214,8 @@ describe('FE-08 sabotage drills: the chat', () => {
     fireEvent.click(screen.getByLabelText('network-drop'))
     send(PROMPT)
     expect(calls).toHaveLength(0)
-    expect(banner().dataset.kind).toBe('offline')
-    expect(within(banner()).getByTestId('failure-code').textContent).toBe('ERR_OFFLINE')
+    expect(banner().textContent).toContain('No connection. Nothing was sent.')
+    expect(within(banner()).getByText('ERR_OFFLINE')).toBeDefined()
     expect(within(log()).getByText(PROMPT)).toBeDefined()
 
     fireEvent.click(retryButton())
@@ -226,23 +239,24 @@ describe('FE-08 sabotage drills: the chat', () => {
     vi.useFakeTimers()
     const { calls } = renderChat()
     send(PROMPT)
-    expect(screen.getByTestId('thinking-indicator')).toBeDefined()
+    expect(screen.getByText('Thinking…')).toBeDefined()
     act(() => {
       vi.advanceTimersByTime(SLOW_REPLY_MS + 10)
     })
-    const body = screen.getByTestId('assistant-body')
-    expect(body.querySelector('[data-skeleton="chat-turn"]')).not.toBeNull()
-    expect(body.className).toContain('min-h-24')
+    const body = reply()
+    expect(within(body).getByText('Still working: no first token after 1.5 s.')).toBeDefined()
+    // jsdom has no layout, so the height reserve is checked as the shared constant, not a hard-coded class name.
+    expect(body.className).toContain(CHAT_TURN_RESERVE)
     emit(at(calls, 0), token('Late but whole.'))
-    expect(body.querySelector('[data-skeleton]')).toBeNull()
-    expect(body.className).toContain('min-h-24')
+    expect(within(body).queryByText('Still working: no first token after 1.5 s.')).toBeNull()
+    expect(body.className).toContain(CHAT_TURN_RESERVE)
   })
 })
 
 describe('FE-08 empty states are next actions', () => {
   it('4a. first run: the onboarding card says what is checked and runs a prompt in one click', () => {
     const { calls } = renderChat()
-    const card = screen.getByTestId('copilot-onboarding')
+    const card = screen.getByRole('region', { name: 'What this copilot checks' })
     expect(card.textContent).toContain('Σ debits === Σ credits')
     expect(card.textContent).toContain('APPROVED → DISBURSED')
     expect(card.textContent).toContain('GCash / Maya')
@@ -258,17 +272,17 @@ describe('FE-08 empty states are next actions', () => {
     expect(search.getAttribute('aria-invalid')).toBe('false')
 
     fireEvent.change(search, { target: { value: 'zzz-nobody' } })
-    const empty = await screen.findByTestId('queue-empty')
+    const empty = await screen.findByRole('region', { name: 'No loans match this view.' })
     expect(empty.textContent).toContain('ALL')
     expect(empty.textContent).toContain('“zzz-nobody”')
     fireEvent.click(within(empty).getByRole('button', { name: `Reset filters & show all loans (${SEED_LOANS.length})` }))
-    expect(screen.queryByTestId('queue-empty')).toBeNull()
+    expect(screen.queryByRole('region', { name: 'No loans match this view.' })).toBeNull()
     expect(screen.getAllByRole('button', { name: /^Review / })).toHaveLength(SEED_LOANS.length)
     expect((search as HTMLInputElement).value).toBe('')
     expect(document.activeElement).toBe(search)
 
     fireEvent.click(screen.getByLabelText('SETTLED'))
-    const settledEmpty = await screen.findByTestId('queue-empty')
+    const settledEmpty = await screen.findByRole('region', { name: 'No loans match this view.' })
     expect(settledEmpty.textContent).toContain('SETTLED')
     fireEvent.click(within(settledEmpty).getByRole('button', { name: 'Load sample borrower application (L-1045 · APPLIED)' }))
     await waitFor(() => {
@@ -291,7 +305,7 @@ describe('FE-08 route error boundary panel', () => {
     )
     const heading = screen.getByRole('heading', { level: 1, name: 'The underwriting screen hit an error.' })
     expect(document.activeElement).toBe(heading)
-    expect(screen.getByTestId('route-error-code').textContent).toBe('ERR_ROUTE_ERROR')
+    expect(screen.getByText('ERR_ROUTE_ERROR')).toBeDefined()
     expect(consoleError).toHaveBeenCalledTimes(1)
     expect(String(consoleError.mock.calls[0]?.[0])).toBe('{"event":"route.error","boundary":"underwriting","type":"Error","digest":null}')
     fireEvent.click(screen.getByRole('button', { name: 'Retry this page' }))
@@ -302,7 +316,7 @@ describe('FE-08 route error boundary panel', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const error = Object.assign(new Error('An error occurred in the Server Components render.'), { digest: '2417760583' })
     render(<RouteErrorPanel error={error} retry={() => {}} boundary="root" title="This page hit an error." />)
-    expect(screen.getByTestId('route-error-code').textContent).toBe('DIGEST_2417760583')
+    expect(screen.getByText('DIGEST_2417760583')).toBeDefined()
   })
 })
 

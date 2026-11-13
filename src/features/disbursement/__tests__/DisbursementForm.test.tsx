@@ -27,6 +27,17 @@ function setup(server: DisbursementServer = createDisbursementServer(SEED_LOANS)
   return { server, ui: within(view.container) }
 }
 
+/** The request log's entries: the list items inside the region named "Request log". */
+function requestLog(ui: ReturnType<typeof within>): HTMLElement[] {
+  return within(ui.getByRole('region', { name: 'Request log' })).queryAllByRole('listitem')
+}
+
+/** The ledger's Σ row (its row header starts with "Σ"): debit total, then credit total. */
+function ledgerTotals(ui: ReturnType<typeof within>): { readonly debits: string; readonly credits: string } {
+  const cells = within(ui.getByRole('row', { name: /^Σ/ })).getAllByRole('cell')
+  return { debits: cells[0]?.textContent ?? '', credits: cells[1]?.textContent ?? '' }
+}
+
 type Ui = ReturnType<typeof setup>['ui']
 
 interface Fill {
@@ -86,8 +97,8 @@ describe('DisbursementForm: APPROVED → DISBURSED with a balanced centavo journ
     expect(journalTotals(entry?.lines ?? [])).toEqual({ debits: 500000, credits: 500000, balanced: true })
     expect(server.listLoans().find((loan) => loan.id === 'L-1042')).toMatchObject({ status: 'DISBURSED', version: 4 })
 
-    expect(ui.getByTestId('ledger-total-debits').textContent).toBe('₱5,000.00')
-    expect(ui.getByTestId('ledger-total-credits').textContent).toBe('₱5,000.00')
+    expect(ledgerTotals(ui).debits).toBe('₱5,000.00')
+    expect(ledgerTotals(ui).credits).toBe('₱5,000.00')
     expect(disburseButton(ui).getAttribute('aria-busy')).toBe('false')
     // The UI never offers an illegal transition: L-1042 is no longer selectable.
     const options = within(ui.getByLabelText('Approved loan')).getAllByRole('option')
@@ -134,9 +145,9 @@ describe('DisbursementForm: duplicates never double-credit the borrower', () => 
     fireEvent.click(ui.getByRole('button', { name: 'Simulate double-click / network retry' }))
 
     await waitFor(() => {
-      expect(ui.getAllByTestId('request-log-entry')).toHaveLength(2)
+      expect(requestLog(ui)).toHaveLength(2)
     })
-    const [first, second] = ui.getAllByTestId('request-log-entry')
+    const [first, second] = requestLog(ui)
     expect(first?.textContent).toContain('201 Created · posted JE-0001')
     expect(second?.textContent).toContain('201 Idempotent replay of JE-0001 · no new ledger entry')
     expect(first?.textContent).toContain('Idempotency-Key: 00000005-0000-4000-8000-000000000000')
@@ -144,7 +155,7 @@ describe('DisbursementForm: duplicates never double-credit the borrower', () => 
 
     expect(server.getLedger()).toHaveLength(1)
     expect(accountBalance(server.getLedger(), 'loans_receivable:borrower-42')).toBe(500000)
-    expect(ui.getByTestId('ledger-total-debits').textContent).toBe('₱5,000.00')
+    expect(ledgerTotals(ui).debits).toBe('₱5,000.00')
   })
 
   it('rejects the second of two admins (new key, same If-Match) with 409 and no second entry', async () => {
@@ -320,9 +331,9 @@ describe('DisbursementForm: pre-filled sample payout (the demo opens ready to te
     fireEvent.click(ui.getByRole('button', { name: 'Simulate double-click / network retry' }))
 
     await waitFor(() => {
-      expect(ui.getAllByTestId('request-log-entry')).toHaveLength(2)
+      expect(requestLog(ui)).toHaveLength(2)
     })
-    const [first, second] = ui.getAllByTestId('request-log-entry')
+    const [first, second] = requestLog(ui)
     expect(first?.textContent).toContain('201 Created · posted JE-0001')
     expect(second?.textContent).toContain('201 Idempotent replay of JE-0001 · no new ledger entry')
     expect(server.getLedger()).toHaveLength(1)
@@ -333,13 +344,13 @@ describe('DisbursementForm: pre-filled sample payout (the demo opens ready to te
     const { ui } = setupSample()
     fireEvent.click(disburseButton(ui))
     await waitFor(() => {
-      expect(ui.getAllByTestId('request-log-entry')).toHaveLength(1)
+      expect(requestLog(ui)).toHaveLength(1)
     })
     // A fulfilled intent clears the loan so the next payout is a new intent.
     expect((ui.getByLabelText('Approved loan') as HTMLSelectElement).value).toBe('')
 
     fireEvent.click(ui.getByRole('button', { name: 'Reset demo' }))
     expect((ui.getByLabelText('Approved loan') as HTMLSelectElement).value).toBe('L-1042')
-    expect(ui.queryAllByTestId('request-log-entry')).toHaveLength(0)
+    expect(requestLog(ui)).toHaveLength(0)
   })
 })

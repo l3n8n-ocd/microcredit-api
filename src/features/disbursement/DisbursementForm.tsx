@@ -489,7 +489,6 @@ export function DisbursementForm({
             {log.map((entry) => (
               <li
                 key={entry.seq}
-                data-testid="request-log-entry"
                 className="rounded-md border border-slate-700 p-3 font-mono text-xs break-all text-slate-200"
               >
                 <p className="font-semibold text-slate-100">
@@ -577,10 +576,10 @@ export function DisbursementForm({
                 <th scope="row" colSpan={2} className="py-1 pr-3">
                   Σ ({ledgerTotals.balanced ? 'balanced' : 'UNBALANCED'})
                 </th>
-                <td data-testid="ledger-total-debits" className="py-1 pr-3 text-right font-mono">
+                <td className="py-1 pr-3 text-right font-mono">
                   {formatPHP(ledgerTotals.debits)}
                 </td>
-                <td data-testid="ledger-total-credits" className="py-1 text-right font-mono">
+                <td className="py-1 text-right font-mono">
                   {formatPHP(ledgerTotals.credits)}
                 </td>
               </tr>

@@ -104,7 +104,7 @@ function ThinkingIndicator() {
   return (
     // Block-level `flex`, not `inline-flex`: an inline box sits on the text baseline and made the line ~27 px,
     // so the first token (a 24 px line) pulled the bubble up 3 px. Measured by e2e/fe08.mjs (FE-08).
-    <span className="flex h-6 items-center gap-2 text-slate-600" data-testid="thinking-indicator">
+    <span className="flex h-6 items-center gap-2 text-slate-600">
       <span aria-hidden="true" className="inline-flex items-center gap-1">
         <span className="copilot-dot" />
         <span className="copilot-dot" />
@@ -145,7 +145,7 @@ function AssistantMessage({ message, tools }: { readonly message: ChatMessage; r
   return (
     <>
       {/* One container for the whole life of the reply: thinking → (skeleton) → first token → full text. */}
-      <div className={slow ? CHAT_TURN_RESERVE : 'min-h-6'} data-testid="assistant-body">
+      <div className={slow ? CHAT_TURN_RESERVE : 'min-h-6'} role="group" aria-label="Copilot reply">
         {waiting ? (
           slow ? <SkeletonCard variant="chat-turn" /> : <ThinkingIndicator />
         ) : text === '' && !hasTools ? (
@@ -193,7 +193,8 @@ function MessageItem({ message, tools }: { readonly message: ChatMessage; readon
           isUser ? 'bg-main text-white' : 'w-full border border-slate-200 bg-canvas text-ink sm:w-auto'
         }`}
       >
-        <span className="sr-only">{isUser ? 'You said: ' : 'Copilot said: '}</span>
+        {/* An assistant reply is a group named "Copilot reply"; a user turn gets the same cue as text. */}
+        {isUser && <span className="sr-only">You said: </span>}
         {isUser ? (
           <p className="wrap-anywhere whitespace-pre-wrap">{messageText(message)}</p>
         ) : (
@@ -258,8 +259,10 @@ function OnboardingCard({
   onPick,
 }: Omit<StarterChipsProps, 'layout' | 'label'> & { readonly toolPrompts: readonly StarterPrompt[] }) {
   return (
-    <div className="mx-auto max-w-xl py-2" data-testid="copilot-onboarding">
-      <h3 className="text-base font-semibold text-ink">What this copilot checks</h3>
+    <section aria-labelledby="copilot-onboarding-title" className="mx-auto max-w-xl py-2">
+      <h3 id="copilot-onboarding-title" className="text-base font-semibold text-ink">
+        What this copilot checks
+      </h3>
       <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
         <li>
           <span className="font-semibold text-ink">Centavo ledger math.</span> Amounts are integer centavos (
@@ -289,7 +292,7 @@ function OnboardingCard({
           </div>
         </>
       )}
-    </div>
+    </section>
   )
 }
 
@@ -338,7 +341,6 @@ function FailureBanner({ failure, prompt, onRetry }: FailureBannerProps) {
   return (
     <div
       role="alert"
-      data-testid="failure-banner"
       data-kind={failure.kind}
       className={`mt-4 rounded-md border border-l-4 border-slate-300 border-l-rose-600 bg-white px-3 py-3 text-sm text-ink ${ENTER_MOTION}`}
     >
@@ -349,7 +351,7 @@ function FailureBanner({ failure, prompt, onRetry }: FailureBannerProps) {
       </p>
       <p className="mt-1 text-slate-700">{failure.message}</p>
       <p className="mt-1 font-mono text-xs text-slate-600">
-        code <span data-testid="failure-code">{failureCode(failure)}</span>
+        code <span>{failureCode(failure)}</span>
       </p>
       {remaining > 0 && (
         <p id={countdownId} className="mt-1 font-mono text-xs text-slate-700">
@@ -399,7 +401,7 @@ interface SabotageToolbarProps {
  */
 function SabotageToolbar({ armed, onArm, disabled, onCrash, onToolError }: SabotageToolbarProps) {
   return (
-    <details className="border-b border-slate-200 bg-canvas px-3 sm:px-4" data-testid="sabotage-toolbar">
+    <details className="border-b border-slate-200 bg-canvas px-3 sm:px-4">
       <summary className={`flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-ink ${FOCUS_RING}`}>
         Sabotage &amp; Resilience Drill Toolbar
         <span className="font-mono text-xs font-normal text-slate-600">{armed === 'off' ? 'off' : `armed: ${armed}`}</span>
@@ -819,7 +821,7 @@ function ChatSession({
           </h2>
           <p className="font-mono text-xs text-slate-300">
             <span aria-hidden="true" className="mr-1.5 inline-block size-2 rounded-full bg-accent align-middle" />
-            engine: <span data-testid="engine-label">{engine.label}</span>
+            engine: <span>{engine.label}</span>
           </p>
         </div>
         <button

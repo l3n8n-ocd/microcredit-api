@@ -52,8 +52,9 @@ const INSTRUMENT = () => {
   const watch = () =>
     new MutationObserver(() => {
       if (window.__fe08.firstToken !== null) return
-      const body = [...document.querySelectorAll('[data-testid="assistant-body"]')].at(-1)
-      if (body && !body.querySelector('[data-testid="thinking-indicator"], [data-skeleton]') && body.textContent.trim() !== '') {
+      const body = [...document.querySelectorAll('[role="group"][aria-label="Copilot reply"]')].at(-1)
+      const text = body?.textContent ?? ''
+      if (body && !text.includes('Thinking…') && !text.includes('Still working') && text.trim() !== '') {
         window.__fe08.firstToken = performance.now()
       }
     }).observe(document.body, { subtree: true, childList: true, characterData: true })
@@ -83,16 +84,17 @@ page.on('request', (request) => {
 })
 
 const copilot = page.locator('#copilot')
-const banner = page.getByTestId('failure-banner')
+// Scoped to the conversation: Next.js's route announcer is also role="alert".
+const banner = page.getByRole('log', { name: 'Conversation' }).getByRole('alert')
 const input = page.getByLabel('Ask the copilot')
-const sendIdle = page.locator('button[data-state="send"]')
+const sendIdle = page.getByRole('button', { name: 'Send' })
+/** The drill toolbar is a <details>: open means its radio labels are visible. */
+const toolbarSummary = () => page.getByText('Sabotage & Resilience Drill Toolbar')
 const openToolbar = async () => {
-  const toolbar = page.getByTestId('sabotage-toolbar')
-  if ((await toolbar.getAttribute('open')) === null) await toolbar.locator('summary').click()
+  if (!(await page.getByLabel('off (normal)').isVisible())) await toolbarSummary().click()
 }
 const closeToolbar = async () => {
-  const toolbar = page.getByTestId('sabotage-toolbar')
-  if ((await toolbar.getAttribute('open')) !== null) await toolbar.locator('summary').click()
+  if (await page.getByLabel('off (normal)').isVisible()) await toolbarSummary().click()
 }
 const arm = async (mode) => {
   await openToolbar()
@@ -113,7 +115,7 @@ await page.reload({ waitUntil: 'networkidle' })
 await copilot.scrollIntoViewIfNeeded()
 
 // ── 1. First-run onboarding ────────────────────────────────────────────────
-const onboarding = page.getByTestId('copilot-onboarding')
+const onboarding = page.getByRole('region', { name: 'What this copilot checks' })
 check((await onboarding.isVisible()) && (await onboarding.getByRole('list', { name: 'Starter prompts' }).getByRole('button').count()) === 4, 'first run: onboarding card with 4 one-click prompts')
 await copilot.screenshot({ path: `${OUT}/fe-08-1-empty-state-onboarding.png` })
 
@@ -134,8 +136,8 @@ await clearChat()
 await arm('mid-stream-error')
 await ask(PROMPT)
 await banner.waitFor({ timeout: 30_000 })
-const partial = await page.locator('[data-testid="assistant-body"]').last().innerText()
-check((await banner.getAttribute('data-kind')) === 'mid-stream', 'mid-stream: banner kind mid-stream')
+const partial = await page.getByRole('group', { name: 'Copilot reply' }).last().innerText()
+check((await banner.innerText()).includes('The reply stopped part-way.'), 'mid-stream: banner kind mid-stream')
 check(partial.trim().length > 20, `mid-stream: partial reply kept (${partial.trim().length} chars)`)
 const retry = banner.getByRole('button')
 const retryLabel = await retry.innerText()
@@ -148,7 +150,14 @@ await retry.dblclick()
 await sendIdle.waitFor({ timeout: 30_000 })
 check(chatPosts - before === 1, `retry double-click sent ${chatPosts - before} request(s)`)
 check((await banner.count()) === 0, 'retry recovered: banner gone')
-const roles = await page.locator('ol > li[data-role]').evaluateAll((items) => items.map((item) => item.dataset.role).join(','))
+// Top-level turns only: the conversation's first list. A reply's own Markdown bullets are not turns.
+const roles = await page
+  .getByRole('log', { name: 'Conversation' })
+  .getByRole('list')
+  .first()
+  .evaluate((list) =>
+    [...list.children].map((item) => (item.querySelector('[role="group"][aria-label="Copilot reply"]') ? 'assistant' : 'user')).join(','),
+  )
 check(roles === 'user,assistant', `retry replaced the failed reply in place (${roles})`)
 
 // ── 4. 429 with Retry-After, and the empty filter ──────────────────────────
@@ -157,11 +166,11 @@ await arm('rate-limit-429')
 await ask(PROMPT)
 await banner.waitFor()
 const rateText = await banner.innerText()
-check((await banner.getAttribute('data-kind')) === 'rate-limit' && rateText.includes('Retry-After:'), 'rate limit: banner with Retry-After countdown')
+check(rateText.includes('Rate limit reached (HTTP 429).') && rateText.includes('Retry-After:'), 'rate limit: banner with Retry-After countdown')
 check(await banner.getByRole('button').isDisabled(), 'rate limit: Retry locked during the countdown')
 await closeToolbar()
 const rateShot = await copilot.screenshot()
-await page.waitForFunction(() => !document.querySelector('[data-testid="failure-banner"]')?.textContent?.includes('Retry-After'), null, { timeout: 10_000 })
+await page.waitForFunction(() => !document.querySelector('[role="log"] [role="alert"]')?.textContent?.includes('Retry-After'), null, { timeout: 10_000 })
 const before429 = chatPosts
 await banner.getByRole('button').click()
 await sendIdle.waitFor({ timeout: 30_000 })
@@ -170,7 +179,7 @@ check(chatPosts - before429 === 1 && (await banner.count()) === 0, 'rate limit: 
 const search = page.getByLabel('Search borrower name or loan ID')
 await search.scrollIntoViewIfNeeded()
 await search.fill('zzz-nobody')
-const empty = page.getByTestId('queue-empty')
+const empty = page.getByRole('region', { name: 'No loans match this view.' })
 await empty.waitFor()
 check((await empty.innerText()).includes('“zzz-nobody”'), 'empty filter: names the query')
 const workbench = page.locator('section', { has: page.getByRole('heading', { name: 'Underwriting workbench' }) }).first()
@@ -199,7 +208,7 @@ const beforeDrop = chatPosts
 await arm('network-drop')
 await ask(PROMPT)
 await banner.waitFor()
-check((await banner.getAttribute('data-kind')) === 'offline' && chatPosts === beforeDrop, `network-drop: offline banner, ${chatPosts - beforeDrop} requests sent`)
+check((await banner.innerText()).includes('No connection. Nothing was sent.') && chatPosts === beforeDrop, `network-drop: offline banner, ${chatPosts - beforeDrop} requests sent`)
 await banner.getByRole('button').click()
 await sendIdle.waitFor({ timeout: 30_000 })
 check((await banner.count()) === 0, 'network-drop: Retry sent it and recovered')
@@ -208,13 +217,13 @@ await clearChat()
 await arm('malformed-tool-json')
 await ask(PROMPT)
 await banner.waitFor({ timeout: 30_000 })
-check((await banner.getAttribute('data-kind')) === 'malformed', 'malformed-tool-json: malformed banner, partial kept')
+check((await banner.innerText()).includes('A reply frame was not valid JSON.'), 'malformed-tool-json: malformed banner, partial kept')
 
 await clearChat()
 await arm('slow-3s')
 await resetFirstToken(page)
 await ask('Walk me through the 10 loan states.')
-await page.locator('[data-skeleton="chat-turn"]').waitFor({ timeout: 2500 })
+await page.getByText('Still working: no first token after 1.5 s.').waitFor({ timeout: 2500 })
 check(true, 'slow-3s: skeleton shown after 1.5 s with no token')
 await sendIdle.waitFor({ timeout: 30_000 })
 const slowShift = await shiftsNearFirstToken(page)
@@ -226,14 +235,14 @@ await openToolbar()
 await page.getByRole('button', { name: /Throw a render error/ }).click()
 const boundaryHeading = page.getByRole('heading', { name: 'The underwriting screen hit an error.' })
 await boundaryHeading.waitFor()
-check((await page.getByTestId('route-error-boundary').innerText()) === 'underwriting', `render-error drill caught by underwriting/error.tsx (code ${await page.getByTestId('route-error-code').innerText()})`)
+check((await page.getByText('error boundary: underwriting').count()) === 1, `render-error drill caught by underwriting/error.tsx (code ${await page.getByText(/^ERR_ROUTE_/).innerText()})`)
 check(await boundaryHeading.evaluate((el) => document.activeElement === el), 'error boundary: focus moved to its heading')
 await page.getByRole('button', { name: 'Retry this page' }).click()
 await page.getByRole('heading', { name: /AI Underwriting/ }).waitFor()
 check(true, 'error boundary: retry() re-rendered the copilot')
 
 const notFound = await page.goto(`${BASE}/no-such-page`)
-check(notFound.status() === 404 && (await page.getByTestId('not-found-code').innerText()) === 'HTTP_404', 'not-found.tsx: HTTP 404 page')
+check(notFound.status() === 404 && (await page.getByText('HTTP_404', { exact: true }).count()) === 1, 'not-found.tsx: HTTP 404 page')
 
 // ── Skeletons vs real boxes (client navigation with the RSC payload delayed) ──
 async function compareSkeleton(fromPath, linkName, skeletonSelector, realSelector) {

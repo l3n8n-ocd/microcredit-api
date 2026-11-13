@@ -243,7 +243,7 @@ export function UnderwritingWorkbench({
             <p className="text-sm text-slate-300">No alternative data on file for this borrower.</p>
           ) : (
             <>
-              <p aria-live="polite" aria-atomic="true" data-testid="trust-score" className="text-base">
+              <p aria-live="polite" aria-atomic="true" className="text-base">
                 Trust score <span className="font-mono text-2xl font-semibold">{selected.score.score}</span> / {MAX_SCORE}
                 {' · '}
                 <span className="font-mono">{selected.score.band}</span> risk
@@ -332,12 +332,15 @@ interface NoResultsProps {
  * ways out: reset to every loan, or open a sample application to review.
  */
 function NoResults({ filter, query, total, sample, onReset, onOpenSample }: NoResultsProps) {
+  const headingId = useId()
   const trimmed = query.trim()
   const button =
     'min-h-11 rounded-md px-3 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:outline-none'
   return (
-    <div className="rounded-lg border border-dashed border-slate-600 bg-slate-900/60 p-4" data-testid="queue-empty">
-      <p className="text-base font-semibold text-slate-100">No loans match this view.</p>
+    <section aria-labelledby={headingId} className="rounded-lg border border-dashed border-slate-600 bg-slate-900/60 p-4">
+      <h3 id={headingId} className="text-base font-semibold text-slate-100">
+        No loans match this view.
+      </h3>
       <p className="mt-1 text-sm text-slate-300">
         State filter <code className="font-mono text-slate-100">{filter}</code>
         {trimmed === '' ? (
@@ -364,7 +367,7 @@ function NoResults({ filter, query, total, sample, onReset, onOpenSample }: NoRe
           </button>
         )}
       </div>
-    </div>
+    </section>
   )
 }
 
