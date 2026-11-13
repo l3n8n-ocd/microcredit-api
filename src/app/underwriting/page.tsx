@@ -4,7 +4,7 @@ import { APPLICANT_PROFILES } from '../../features/scoring/applicants.ts'
 import { scoreApplicant } from '../../features/scoring/scoreEngine.ts'
 import { StreamingUnderwritingChat } from '../../features/ai-copilot/StreamingUnderwritingChat.tsx'
 import { UnderwritingStandalone } from '../../features/scoring/UnderwritingStandalone.tsx'
-import { STARTER_PROMPTS, describeEngine } from '../../lib/ai/underwriting-model.ts'
+import { STARTER_PROMPTS, TOOL_PROMPTS, describeEngine } from '../../lib/ai/underwriting-model.ts'
 
 /**
  * The engine label depends on which API key is set, and Vercel env vars can
@@ -49,7 +49,7 @@ export default function UnderwritingPage() {
       </dl>
 
       <div className="mt-8">
-        <StreamingUnderwritingChat starterPrompts={STARTER_PROMPTS} engine={describeEngine()} />
+        <StreamingUnderwritingChat starterPrompts={STARTER_PROMPTS} toolPrompts={TOOL_PROMPTS} engine={describeEngine()} />
       </div>
 
       <section className="mt-8 rounded-lg border border-slate-800 bg-slate-950 p-4 text-slate-100">

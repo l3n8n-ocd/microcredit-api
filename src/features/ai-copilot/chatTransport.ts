@@ -3,7 +3,14 @@
  * `ChatTransport` type, not on `fetch`, so tests pass a fake they can drive
  * token by token and abort on demand (dependency injection).
  */
-import { createSseParser, SABOTAGE_HEADER, type ChatStreamEvent, type SabotageMode, type WireMessage } from './chatProtocol.ts'
+import {
+  createSseParser,
+  SABOTAGE_HEADER,
+  type ChatStreamEvent,
+  type DirectToolCall,
+  type SabotageMode,
+  type WireMessage,
+} from './chatProtocol.ts'
 import type { ChatFailureKind } from './chatTypes.ts'
 
 export interface ChatTransportArgs {
@@ -13,6 +20,8 @@ export interface ChatTransportArgs {
   readonly onEvent: (event: ChatStreamEvent) => void
   /** FE-08: break this one request on purpose. Sent as the `x-sabotage-mode` header. */
   readonly sabotage?: SabotageMode
+  /** FE-07: run exactly this tool with this input (the sanitized retry). */
+  readonly toolCall?: DirectToolCall
 }
 
 /**
@@ -78,13 +87,13 @@ function cancelOnServer(requestId: string): void {
  *   2. An explicit `DELETE /api/chat?requestId=…` names this request, and the
  *      server aborts the model call directly.
  */
-export const fetchChatTransport: ChatTransport = async ({ messages, signal, onEvent, sabotage }) => {
+export const fetchChatTransport: ChatTransport = async ({ messages, signal, onEvent, sabotage, toolCall }) => {
   const requestId = crypto.randomUUID()
   const onAbort = (): void => cancelOnServer(requestId)
   signal.addEventListener('abort', onAbort, { once: true })
 
   try {
-    await streamChat(requestId, messages, signal, onEvent, sabotage ?? null)
+    await streamChat(requestId, messages, signal, onEvent, sabotage ?? null, toolCall ?? null)
   } finally {
     // A reply that ended on its own has nothing left to cancel.
     signal.removeEventListener('abort', onAbort)
@@ -97,6 +106,7 @@ async function streamChat(
   signal: AbortSignal,
   onEvent: ChatTransportArgs['onEvent'],
   sabotage: SabotageMode | null,
+  toolCall: DirectToolCall | null,
 ): Promise<void> {
   let response: Response
   try {
@@ -107,7 +117,7 @@ async function streamChat(
         Accept: 'text/event-stream',
         ...(sabotage === null ? {} : { [SABOTAGE_HEADER]: sabotage }),
       },
-      body: JSON.stringify({ messages, requestId }),
+      body: JSON.stringify({ messages, requestId, ...(toolCall === null ? {} : { toolCall }) }),
       signal,
     })
   } catch (error) {

@@ -29,7 +29,7 @@
  * malformed-tool-json | slow-3s` (or `"sabotage"` in the body) breaks this one
  * request on purpose. See src/lib/ai/sabotage.ts.
  */
-import { APICallError, RetryError, streamText } from 'ai'
+import { APICallError, RetryError, stepCountIs, streamText } from 'ai'
 import {
   encodeSseFrame,
   isRequestId,
@@ -42,11 +42,15 @@ import {
 } from '../../../features/ai-copilot/chatProtocol.ts'
 import { activeRequests } from '../../../lib/ai/active-requests.ts'
 import { sabotageResponse } from '../../../lib/ai/sabotage.ts'
+import { planLocalTool, streamLocalToolCall, type ToolTiming } from '../../../lib/ai/tool-runner.ts'
+import { isToolName, TOOL_META, toolErrorCode, toolErrorText } from '../../../lib/ai/tools.ts'
 import { chatStats, type ModelOutcome } from '../../../lib/ai/chat-stats.ts'
 import { streamLocalReply } from '../../../lib/ai/local-engine.ts'
 import { CHAT_RATE_LIMIT, chatRateLimiter, clientKey, describeWait } from '../../../lib/ai/rate-limit.ts'
 import {
+  MAX_MODEL_STEPS,
   MODEL_CONFIG,
+  UNDERWRITING_TOOLS,
   buildSystemPrompt,
   describeEngine,
   resolveChatEngine,
@@ -69,7 +73,19 @@ const SSE_HEADERS = {
   'X-Accel-Buffering': 'no',
 } as const
 
+/** FE-07: the local tool runner's pacing, from MODEL_CONFIG so tests can speed it up. */
+function toolTiming(): ToolTiming {
+  return { deltaMs: MODEL_CONFIG.localToolDeltaMs, executeMs: MODEL_CONFIG.localToolExecuteMs, tokenMs: MODEL_CONFIG.localTokenDelayMs }
+}
+
 async function streamFromLocalEngine(messages: readonly WireMessage[], signal: AbortSignal, send: Send): Promise<void> {
+  // FE-07: a request that names a tool gets a real tool call (validate → execute → card), then a summary.
+  const plan = planLocalTool(messages)
+  if (plan !== null) {
+    await streamLocalToolCall(plan, signal, send, toolTiming())
+    if (!signal.aborted) send({ type: 'done', finishReason: 'stop' })
+    return
+  }
   const tokens = streamLocalReply(messages, {
     signal,
     tokenDelayMs: MODEL_CONFIG.localTokenDelayMs,
@@ -119,6 +135,8 @@ interface StreamProgress {
   readonly parts: Record<string, number>
   /** Set when the provider produced nothing within `modelFirstResponseMs`. */
   stalled: boolean
+  /** FE-07: tool lifecycle frames relayed to the client. A reply can be a tool call and no text. */
+  toolEvents: number
 }
 
 /** Stream part families that only a provider response can produce (the SDK emits `start` etc. itself). */
@@ -216,17 +234,48 @@ async function relayModelStream(
     reasoning: engine.reasoning,
     // Errors are handled below from the stream's `error` part. Without this the SDK also dumps them to the console.
     onError: () => {},
-    // FE-07: `tools: { score_applicant, check_transition }` and `stopWhen` go here.
+    // FE-07: the model may call the three tools in src/lib/ai/tools.ts, then write a summary step.
+    tools: UNDERWRITING_TOOLS,
+    stopWhen: stepCountIs(MAX_MODEL_STEPS),
   })
 
   let finishReason = 'stop'
   let outputTokens: number | null = null
+  /** Tool calls that already sent `tool-input-start`: some providers send the whole input in one `tool-call`. */
+  const started = new Set<string>()
+  const sendTool = (event: Parameters<Send>[0]): void => {
+    progress.toolEvents += 1
+    send(event)
+  }
+  const startTool = (toolCallId: string, toolName: string): void => {
+    if (started.has(toolCallId)) return
+    started.add(toolCallId)
+    const whenToUse = isToolName(toolName) ? TOOL_META[toolName].whenToUse : 'The model chose a tool.'
+    sendTool({ type: 'tool-input-start', toolCallId, toolName, rationale: `Model's choice. ${whenToUse}` })
+  }
   for await (const part of result.stream) {
     progress.parts[part.type] = (progress.parts[part.type] ?? 0) + 1
     if (PROVIDER_OUTPUT.test(part.type)) onFirstResponse()
     if (part.type === 'text-delta') {
       progress.deltas += 1
       send({ type: 'token', text: part.text })
+    } else if (part.type === 'tool-input-start') {
+      startTool(part.id, part.toolName)
+    } else if (part.type === 'tool-input-delta') {
+      sendTool({ type: 'tool-input-delta', toolCallId: part.id, delta: part.delta })
+    } else if (part.type === 'tool-call') {
+      startTool(part.toolCallId, part.toolName)
+      sendTool({ type: 'tool-input-available', toolCallId: part.toolCallId, toolName: part.toolName, input: part.input })
+    } else if (part.type === 'tool-result') {
+      sendTool({ type: 'tool-output-available', toolCallId: part.toolCallId, output: part.output })
+    } else if (part.type === 'tool-error') {
+      startTool(part.toolCallId, part.toolName)
+      sendTool({
+        type: 'tool-output-error',
+        toolCallId: part.toolCallId,
+        errorCode: toolErrorCode(part.error),
+        errorText: toolErrorText(part.error),
+      })
     } else if (part.type === 'finish') {
       finishReason = part.finishReason
       outputTokens = part.totalUsage.outputTokens ?? null
@@ -238,8 +287,8 @@ async function relayModelStream(
     }
   }
   if (signal.aborted) return outputTokens
-  // A "successful" reply with no text would leave an empty bubble. Treat it as a failure.
-  if (progress.deltas === 0) throw new ModelSilentError('model returned no text')
+  // A "successful" reply with no text and no tool call would leave an empty bubble. Treat it as a failure.
+  if (progress.deltas === 0 && progress.toolEvents === 0) throw new ModelSilentError('model returned no text')
   send({ type: 'done', finishReason })
   return outputTokens
 }
@@ -297,6 +346,13 @@ export async function POST(req: Request): Promise<Response> {
     return sabotageResponse(rawSabotage, messages, req)
   }
 
+  // FE-07 "Retry Tool Call with Sanitized Inputs": run exactly that tool, re-validated, with no model.
+  if (parsed.toolCall !== null) {
+    const { toolName, input } = parsed.toolCall
+    if (!isToolName(toolName)) return Response.json({ error: `Unknown tool ${toolName}.` }, { status: 400 })
+    return directToolResponse({ toolName, input, rationale: 'Retry from the error card, with the inputs it sanitized.' }, req)
+  }
+
   // 2. Pick the engine. Keys are read here, on the server, per request.
   const engine = resolveChatEngine()
 
@@ -337,7 +393,7 @@ export async function POST(req: Request): Promise<Response> {
           return
         }
 
-        const progress: StreamProgress = { deltas: 0, parts: {}, stalled: false }
+        const progress: StreamProgress = { deltas: 0, parts: {}, stalled: false, toolEvents: 0 }
         const startedAt = Date.now()
         const log = (outcome: ModelOutcome, outputTokens: number | null, status: number | null = null): void =>
           logModelRequest({
@@ -366,7 +422,7 @@ export async function POST(req: Request): Promise<Response> {
             error instanceof Error ? error.name : 'unknown error',
             status === null ? 'no HTTP status' : `HTTP ${status}`,
           )
-          if (progress.deltas > 0) {
+          if (progress.deltas > 0 || progress.toolEvents > 0) {
             log('error', null, status)
             send({ type: 'error', message: 'The model stopped responding part-way through. The partial reply is kept.' })
             return
@@ -407,6 +463,37 @@ export async function POST(req: Request): Promise<Response> {
     },
   })
 
+  return new Response(stream, { headers: SSE_HEADERS })
+}
+
+/** Streams one direct tool call (no model, nothing billed) through the same lifecycle frames. */
+function directToolResponse(plan: Parameters<typeof streamLocalToolCall>[0], req: Request): Response {
+  const encoder = new TextEncoder()
+  const abort = new AbortController()
+  const onRequestAbort = (): void => abort.abort()
+  req.signal.addEventListener('abort', onRequestAbort, { once: true })
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send: Send = (event) => {
+        if (!abort.signal.aborted) controller.enqueue(encoder.encode(encodeSseFrame(event)))
+      }
+      try {
+        send({ type: 'meta', engine: { kind: 'local', label: 'local tool runner (retry with sanitized inputs)' } })
+        await streamLocalToolCall(plan, abort.signal, send, toolTiming())
+        send({ type: 'done', finishReason: 'stop' })
+      } finally {
+        req.signal.removeEventListener('abort', onRequestAbort)
+        try {
+          controller.close()
+        } catch {
+          // Already closed by `cancel`.
+        }
+      }
+    },
+    cancel() {
+      abort.abort()
+    },
+  })
   return new Response(stream, { headers: SSE_HEADERS })
 }
 

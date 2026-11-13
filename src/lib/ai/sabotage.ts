@@ -13,6 +13,7 @@
  */
 import { encodeSseFrame, type ChatStreamEvent, type SabotageMode, type WireMessage } from '../../features/ai-copilot/chatProtocol.ts'
 import { streamLocalReply } from './local-engine.ts'
+import { planLocalTool, streamLocalToolCall } from './tool-runner.ts'
 import { MODEL_CONFIG } from './underwriting-model.ts'
 
 /** Tokens streamed before the mid-stream drill cuts the reply. */
@@ -85,6 +86,20 @@ export function sabotageResponse(mode: SabotageMode, messages: readonly WireMess
 
       try {
         send({ type: 'meta', engine: { kind: 'local', label: `local rule engine (sabotage drill: ${mode})` } })
+
+        if (mode === 'tool-error') {
+          // FE-07: a tool call whose input fails its Zod schema, so the card reaches `output-error`.
+          const plan = planLocalTool(messages, { forceError: true })
+          if (plan !== null) {
+            await streamLocalToolCall(plan, abort.signal, send, {
+              deltaMs: MODEL_CONFIG.localToolDeltaMs,
+              executeMs: MODEL_CONFIG.localToolExecuteMs,
+              tokenMs: MODEL_CONFIG.localTokenDelayMs,
+            })
+          }
+          send({ type: 'done', finishReason: 'stop' })
+          return
+        }
 
         if (mode === 'slow-3s') {
           await wait(SLOW_DRILL_MS, abort.signal)

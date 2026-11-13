@@ -23,7 +23,7 @@ import 'server-only'
 
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createGoogle } from '@ai-sdk/google'
-import type { LanguageModel } from 'ai'
+import { tool, type LanguageModel } from 'ai'
 import type { EngineInfo } from '../../features/ai-copilot/chatProtocol.ts'
 import type { StarterPrompt } from '../../features/ai-copilot/chatTypes.ts'
 import { LEGAL_TRANSITIONS } from '../../features/disbursement/loanStateMachine.ts'
@@ -32,6 +32,15 @@ import { INTEREST_RATE_BPS, formatBps, recommendLimit, scoreApplicant } from '..
 import { readSecret } from '../../utils/env.ts'
 import { formatPHP } from '../../utils/money.ts'
 import { lifecycleEdges } from './local-engine.ts'
+import {
+  ledgerInputSchema,
+  proposalInputSchema,
+  runTool,
+  TOOL_META,
+  ToolFailure,
+  trustScoreInputSchema,
+  type ToolName,
+} from './tools.ts'
 
 // ── 1. Model configuration ──────────────────────────────────────────────────
 
@@ -88,6 +97,10 @@ export const MODEL_CONFIG = {
   localTokenDelayMs: 22,
   /** Local rule engine: pause before the first token, so "thinking" is a visible state. */
   localFirstTokenDelayMs: 450,
+  /** FE-07 local tool calls: pause between input deltas, so `input-streaming` is watchable. */
+  localToolDeltaMs: 40,
+  /** FE-07 local tool calls: how long `input-available` ("running on the server") stays on screen. */
+  localToolExecuteMs: 600,
 } as const
 
 // ── 2. Starter prompts ──────────────────────────────────────────────────────
@@ -117,6 +130,35 @@ export const STARTER_PROMPTS: readonly StarterPrompt[] = [
     id: 'idempotency',
     label: 'Two admins click Disburse',
     prompt: 'Two admins click Disburse on the same loan at once. What do Idempotency-Key and If-Match do?',
+  },
+]
+
+/**
+ * FE-07 tool chips. Each one is phrased so the local engine's tool runner
+ * recognises it, and a hosted model has every number it needs to call the tool.
+ */
+export const TOOL_PROMPTS: readonly StarterPrompt[] = [
+  {
+    id: 'tool-score',
+    label: 'Run Trust Score Tool (Chart)',
+    prompt:
+      "Run the trust score tool for Nena's Sari-Sari Store: 92% of utility bills on time, 18 supplier invoices, 5 GCash load top-ups a week, requesting ₱15,000.00.",
+  },
+  {
+    id: 'tool-ledger',
+    label: 'Run Ledger Audit Tool (Table)',
+    prompt: 'Run the ledger audit tool on L-1042: ₱5,000.00 to GCash at version 3, and show what a retry with the same Idempotency-Key gets.',
+  },
+  {
+    id: 'tool-propose',
+    label: 'Propose Disbursement (Confirm Tool)',
+    prompt: 'Propose disbursing ₱5,000.00 on L-1042 to GCash at version 3 for my confirmation.',
+  },
+  {
+    id: 'tool-error',
+    label: 'Simulate Tool Error State',
+    prompt: "Simulate tool error: score Nena's Sari-Sari Store with requestedCentavos -500000.",
+    drill: 'tool-error',
   },
 ]
 
@@ -199,6 +241,14 @@ Every successful transition returns a new loan with version + 1.
 - A new key with a stale If-Match returns 409 VERSION_MISMATCH and posts nothing.
 - The same key with a different payload returns 422 IDEMPOTENCY_KEY_REUSED.
 
+# Tools
+
+- evaluateBorrowerTrustScore: call it when the officer asks for a score or a limit and gives (or names a demo borrower with) utility on-time %, supplier invoice count and weekly GCash/Maya top-ups. Pass requestedCentavos only when an amount is stated.
+- verifyLedgerAndIdempotency: call it for any question about a payout balancing or being retried. Make a fresh UUID v4 for idempotencyKey.
+- proposeDisbursementExecution: call it when the officer asks to pay out a loan. It only proposes. Never say money moved: the officer must press Approve & Execute Payout.
+- All amounts you pass are integer centavos: ₱5,000.00 is 500000.
+- After a tool returns, write two or three sentences on what the result means. The UI already draws the result as a card, so never paste its JSON. If a tool fails, name its error code and say the card has a Retry button.
+
 # Guardrails
 
 1. Money is integer centavos. ₱1.00 = 100. Never do or describe floating-point currency math, never round an intermediate value to a fixed number of decimals. When you show an amount, give pesos and, where it helps, the centavo integer.
@@ -218,6 +268,40 @@ Every successful transition returns a new loan with version + 1.
 - Markdown subset only: short paragraphs, "-" lists, **bold**, \`inline code\`, and fenced code blocks. No tables, no HTML, no images.
 - Keep replies under about 250 words unless asked for more.`
 }
+
+// ── 3b. Tools (FE-07) ───────────────────────────────────────────────────────
+
+/** Runs a tool through the same validate → execute path the local engine uses, and throws its coded failure. */
+async function executeTool(name: ToolName, input: unknown) {
+  const run = await runTool(name, input)
+  if (!run.ok) throw new ToolFailure(run.code, run.message)
+  return run.output
+}
+
+/**
+ * The tools a hosted model may call. Schemas, descriptions and execution all
+ * come from src/lib/ai/tools.ts; this only wraps them for the AI SDK.
+ */
+export const UNDERWRITING_TOOLS = {
+  evaluateBorrowerTrustScore: tool({
+    description: TOOL_META.evaluateBorrowerTrustScore.description,
+    inputSchema: trustScoreInputSchema,
+    execute: (input) => executeTool('evaluateBorrowerTrustScore', input),
+  }),
+  verifyLedgerAndIdempotency: tool({
+    description: TOOL_META.verifyLedgerAndIdempotency.description,
+    inputSchema: ledgerInputSchema,
+    execute: (input) => executeTool('verifyLedgerAndIdempotency', input),
+  }),
+  proposeDisbursementExecution: tool({
+    description: TOOL_META.proposeDisbursementExecution.description,
+    inputSchema: proposalInputSchema,
+    execute: (input) => executeTool('proposeDisbursementExecution', input),
+  }),
+}
+
+/** Up to two tool calls, then a step that writes the summary. */
+export const MAX_MODEL_STEPS = 3
 
 // ── 4. Engine resolution ────────────────────────────────────────────────────
 

@@ -114,7 +114,7 @@ await copilot.scrollIntoViewIfNeeded()
 
 // ── 1. First-run onboarding ────────────────────────────────────────────────
 const onboarding = page.getByTestId('copilot-onboarding')
-check((await onboarding.isVisible()) && (await onboarding.getByRole('button').count()) === 4, 'first run: onboarding card with 4 one-click prompts')
+check((await onboarding.isVisible()) && (await onboarding.getByRole('list', { name: 'Starter prompts' }).getByRole('button').count()) === 4, 'first run: onboarding card with 4 one-click prompts')
 await copilot.screenshot({ path: `${OUT}/fe-08-1-empty-state-onboarding.png` })
 
 // ── 2. Happy path, zero console errors, shifts at the first token ──────────

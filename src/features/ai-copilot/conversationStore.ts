@@ -6,7 +6,7 @@
  * The data stays in the visitor's own browser. Nothing here is sent anywhere.
  */
 import type { EngineInfo } from './chatProtocol.ts'
-import type { ChatMessage, MessageOutcome } from './chatTypes.ts'
+import { TOOL_STATES, type ChatMessage, type ChatMessagePart, type MessageOutcome, type ToolDecision, type ToolPart, type ToolState } from './chatTypes.ts'
 
 /** Versioned key: a breaking change to the stored shape bumps `_v1` instead of migrating. */
 export const STORAGE_KEY = 'microcredit_ai_copilot_v1'
@@ -30,6 +30,76 @@ function readOutcome(value: unknown): MessageOutcome | null {
   return value === 'complete' || value === 'error' ? value : null
 }
 
+function readToolState(value: unknown): ToolState | null {
+  return TOOL_STATES.find((state) => state === value) ?? null
+}
+
+const nullableString = (value: unknown): string | null => (typeof value === 'string' ? value : null)
+const nullableNumber = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null)
+
+function readDecision(value: unknown): ToolDecision | null {
+  if (!isRecord(value) || typeof value.at !== 'string') return null
+  if (value.kind === 'cancelled') return { kind: 'cancelled', at: value.at }
+  if (value.kind !== 'executed' || typeof value.status !== 'number' || typeof value.outcome !== 'string') return null
+  return {
+    kind: 'executed',
+    at: value.at,
+    status: value.status,
+    outcome: value.outcome,
+    message: typeof value.message === 'string' ? value.message : '',
+    loanStatus: nullableString(value.loanStatus),
+    loanVersion: nullableNumber(value.loanVersion),
+    debitsCentavos: nullableNumber(value.debitsCentavos),
+    creditsCentavos: nullableNumber(value.creditsCentavos),
+    entriesForLoan: nullableNumber(value.entriesForLoan) ?? 0,
+    replays: nullableNumber(value.replays) ?? 0,
+    lastReplay: nullableString(value.lastReplay),
+  }
+}
+
+/** A stored tool call. `input` and `output` stay `unknown`: the card validates them against the tool's Zod schemas. */
+function readToolPart(value: Record<string, unknown>): ToolPart | null {
+  const state = readToolState(value.state)
+  if (typeof value.toolCallId !== 'string' || typeof value.toolName !== 'string' || state === null) return null
+  const timeline = Array.isArray(value.timeline)
+    ? (value.timeline as readonly unknown[]).flatMap((step) => {
+        if (!isRecord(step) || typeof step.at !== 'number') return []
+        const stepState = readToolState(step.state)
+        return stepState === null ? [] : [{ state: stepState, at: step.at }]
+      })
+    : []
+  return {
+    type: 'tool',
+    toolCallId: value.toolCallId,
+    toolName: value.toolName,
+    state,
+    rationale: typeof value.rationale === 'string' ? value.rationale : '',
+    inputText: typeof value.inputText === 'string' ? value.inputText : '',
+    input: value.input ?? null,
+    output: value.output ?? null,
+    errorCode: nullableString(value.errorCode),
+    errorText: nullableString(value.errorText),
+    timeline,
+    decision: readDecision(value.decision),
+  }
+}
+
+function readParts(parts: readonly unknown[]): readonly ChatMessagePart[] {
+  const out: ChatMessagePart[] = []
+  for (const part of parts) {
+    if (!isRecord(part)) continue
+    if (part.type === 'text' && typeof part.text === 'string') {
+      const last = out.at(-1)
+      if (last?.type === 'text') out[out.length - 1] = { type: 'text', text: last.text + part.text }
+      else out.push({ type: 'text', text: part.text })
+    } else if (part.type === 'tool') {
+      const tool = readToolPart(part)
+      if (tool !== null) out.push(tool)
+    }
+  }
+  return out.length === 0 ? [{ type: 'text', text: '' }] : out
+}
+
 function readMessage(value: unknown): ChatMessage | null {
   if (!isRecord(value)) return null
   const { id, role, parts, createdAt, finishReason } = value
@@ -37,14 +107,12 @@ function readMessage(value: unknown): ChatMessage | null {
   if (typeof id !== 'string' || typeof createdAt !== 'string' || outcome === null) return null
   if ((role !== 'user' && role !== 'assistant') || !Array.isArray(parts)) return null
 
-  const text = (parts as readonly unknown[])
-    .map((part) => (isRecord(part) && part.type === 'text' && typeof part.text === 'string' ? part.text : ''))
-    .join('')
   const engine = readEngine(value.engine)
   return {
     id,
     role,
-    parts: [{ type: 'text', text }],
+    // Users only ever write text; an assistant reply keeps its tool cards, in order.
+    parts: role === 'user' ? [{ type: 'text', text: readParts(parts as readonly unknown[]).map((part) => (part.type === 'text' ? part.text : '')).join('') }] : readParts(parts as readonly unknown[]),
     createdAt,
     outcome,
     ...(engine === null ? {} : { engine }),

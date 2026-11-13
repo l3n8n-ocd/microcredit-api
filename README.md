@@ -151,10 +151,11 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (429 tests)                |
+| `npm test`          | Run the Vitest suite once (461 tests)                |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
 | `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 32 browser checks and the 4 Checkpoint 1 screenshots |
+| `npm run test:e2e:fe07` | After `build`: FE-07 tool cards, 14 browser checks and the 6 tool-state screenshots |
 | `npm run test:e2e`  | After `build`: above-the-fold on `/`, all 5 routes at 375px/1280px with no overflow, and the AI Copilot streaming checks (Playwright) |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -168,6 +169,31 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
 
 - **What this repo proves:** [`docs/WHAT_ARE_YOU_PROVING.md`](./docs/WHAT_ARE_YOU_PROVING.md)
   has the sharpened proof statement, the one-line why, and the narrowing log.
+
+## 🛠️ FE-07: AI Tool Contracts & Generative UI
+
+The copilot on [`/underwriting`](https://microcredit-api-beta.vercel.app/underwriting) calls three typed tools.
+Contracts live in [`src/lib/ai/tools.ts`](./src/lib/ai/tools.ts), and each call is drawn by
+[`ToolInvocationCard.tsx`](./src/features/ai-copilot/ToolInvocationCard.tsx). Full write-up:
+[`docs/FE-07_TOOL_UI.md`](./docs/FE-07_TOOL_UI.md).
+
+| Tool | Zod input | Returns | Drawn as |
+| --- | --- | --- | --- |
+| `evaluateBorrowerTrustScore` | `borrowerName`, `businessType` (4 kinds), `monthlyUtilityOnTimeRatio` 0–100, `supplierInvoiceCount` 0–50, `gcashLoadWeeklyCadence` 0–30, optional `requestedCentavos` 50000–5000000 | `score` 0–1000, `riskTier`, 3 `pillars`, `recommendedLimitCentavos`, `requested` (`null` when omitted), `reasonCodes` | score card + SVG 3-bar chart; "Fallback" badge when no amount was requested |
+| `verifyLedgerAndIdempotency` | `loanId`, `disbursementCentavos`, `walletProvider` GCash/Maya, `idempotencyKey` (UUID v4), `expectedVersion` (`If-Match`) | first attempt and same-key retry (`201 CREATED` → `201 REPLAYED`), journal lines in centavos, `Σ debits === Σ credits`, `idempotencyStatus` | double-entry findings table |
+| `proposeDisbursementExecution` | `loanId` (must be `APPROVED`), `disbursementCentavos`, `walletProvider`, `expectedVersion` | `AWAITING_CONFIRMATION` proposal with `If-Match`, `Idempotency-Key`, journal preview. **Posts nothing.** | confirm widget: **Approve & Execute Payout** pays once (double-click safe), **Cancel Action** sends nothing |
+
+**4 states per call:**
+- `input-streaming`: "Choosing tool", the rationale, and argument pills filling in.
+- `input-available`: the inputs locked, in plain words.
+- `output-available`: the component for that tool.
+- `output-error`: the error code, the preserved inputs, and **Retry Tool Call with Sanitized Inputs**.
+
+A state inspector on each card pins any state the call reached. The `tool-error` drill (toolbar button
+or chip) reaches `output-error` on demand.
+
+**Error codes:** `ERR_TOOL_SCHEMA_BOUNDS`, `ERR_LEDGER_LOAN_NOT_FOUND`, `ERR_ILLEGAL_TRANSITION`,
+`ERR_STALE_IF_MATCH`, `ERR_TOOL_EXECUTION`. Each one's retry fix is listed in the doc.
 
 ## 🎓 FlyRank Internship Deliverables
 
@@ -366,6 +392,13 @@ documented in [`docs/PORTFOLIO_PATH.md`](./docs/PORTFOLIO_PATH.md).
     3 px jump in FE-06's thinking indicator.
   - `npm test` 429/429, `npm run test:e2e:fe08` 32/32 ([`e2e/fe08.mjs`](./e2e/fe08.mjs)); route boundaries
     `src/app/error.tsx`, `src/app/underwriting/error.tsx`, `src/app/not-found.tsx`.
+- **FE-07 · Tool Results and Structured Output in the UI:** [`docs/FE-07_TOOL_UI.md`](./docs/FE-07_TOOL_UI.md) · [`src/lib/ai/tools.ts`](./src/lib/ai/tools.ts) · [`src/features/ai-copilot/ToolInvocationCard.tsx`](./src/features/ai-copilot/ToolInvocationCard.tsx)
+  - **3 Zod tools, 4 card states, never raw JSON:** a trust-score SVG chart, a double-entry findings table in
+    centavos, and a confirm widget. Every result is validated against its output schema before it is drawn.
+  - **The confirm widget proves the One Claim in the copilot:** Approve sends `Idempotency-Key` + `If-Match`.
+    A double-click pays once, and the replay test returns `201 REPLAYED` with 1 ledger entry.
+  - `npm test` 461/461 (32 new), `npm run test:e2e:fe07` 14/14 ([`e2e/fe07.mjs`](./e2e/fe07.mjs)). The hosted-model path
+    is tested with a mock model only; no key is set in the build environment.
 
 ## License
 

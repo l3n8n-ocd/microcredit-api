@@ -13,13 +13,22 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { CHAT_TURN_RESERVE, SkeletonCard } from '../../components/ui/SkeletonCard.tsx'
-import { CHAT_LIMITS, SABOTAGE_MODES, type ChatStreamEvent, type EngineInfo, type SabotageMode } from './chatProtocol.ts'
+import type { ToolName } from '../../lib/ai/tools.ts'
+import {
+  CHAT_LIMITS,
+  SABOTAGE_MODES,
+  type ChatStreamEvent,
+  type DirectToolCall,
+  type EngineInfo,
+  type SabotageMode,
+} from './chatProtocol.ts'
 import { chatReducer, createInitialState, isBusy, toWireHistory, type ChatFailure } from './chatReducer.ts'
 import { ChatRequestError, fetchChatTransport, type ChatTransport } from './chatTransport.ts'
 import { failureCode, shortPrompt } from './chatFailure.ts'
-import { messageText, type ChatFailureKind, type ChatMessage, type StarterPrompt } from './chatTypes.ts'
+import { messageText, toolPartsOf, type ChatFailureKind, type ChatMessage, type StarterPrompt, type ToolDecision } from './chatTypes.ts'
 import { clearConversation, loadConversation, saveConversation } from './conversationStore.ts'
 import { StreamingMarkdown } from './StreamingMarkdown.tsx'
+import { ToolInvocationCard } from './ToolInvocationCard.tsx'
 
 /**
  * AI Underwriting & Ledger Risk Copilot: the streaming chat UI.
@@ -61,6 +70,8 @@ export interface StreamingUnderwritingChatProps {
   readonly engine: EngineInfo
   /** Injected in tests. Defaults to `fetch` + SSE against `/api/chat`. */
   readonly transport?: ChatTransport
+  /** FE-07 tool chips (`TOOL_PROMPTS`). One may carry a drill, e.g. `tool-error`. */
+  readonly toolPrompts?: readonly StarterPrompt[]
 }
 
 function subscribeToNothing(): () => void {
@@ -106,10 +117,19 @@ function ThinkingIndicator() {
 
 const BADGE = 'mt-2 inline-block rounded border px-1.5 py-0.5 font-mono text-xs'
 
-function AssistantMessage({ message }: { readonly message: ChatMessage }) {
+/** What an assistant bubble needs to drive its tool cards. */
+interface ToolHandlers {
+  readonly onDecision: (messageId: string, toolCallId: string, decision: ToolDecision) => void
+  readonly onToolRetry: (toolName: ToolName, input: Record<string, unknown>, changes: string) => void
+  /** True while any reply is streaming: a tool retry waits for it. */
+  readonly busy: boolean
+}
+
+function AssistantMessage({ message, tools }: { readonly message: ChatMessage; readonly tools: ToolHandlers }) {
   const text = messageText(message)
   const pending = message.outcome === 'pending'
-  const waiting = pending && text === ''
+  const hasTools = toolPartsOf(message).length > 0
+  const waiting = pending && text === '' && !hasTools
   /**
    * FE-08: past 1.5 s with no token, "thinking" becomes a skeleton. Once shown,
    * the body keeps the skeleton's height (`CHAT_TURN_RESERVE`), so the first
@@ -128,11 +148,24 @@ function AssistantMessage({ message }: { readonly message: ChatMessage }) {
       <div className={slow ? CHAT_TURN_RESERVE : 'min-h-6'} data-testid="assistant-body">
         {waiting ? (
           slow ? <SkeletonCard variant="chat-turn" /> : <ThinkingIndicator />
-        ) : text === '' ? (
+        ) : text === '' && !hasTools ? (
           <p className="text-slate-600">No reply text.</p>
         ) : (
-          // A stopped or failed reply was cut mid-construct, so it keeps the tolerant parsing for good.
-          <StreamingMarkdown text={text} streaming={message.outcome !== 'complete'} />
+          // Text and tool cards in the order they streamed. A stopped or failed reply keeps the tolerant parsing.
+          message.parts.map((part, index) =>
+            part.type === 'tool' ? (
+              <ToolInvocationCard
+                key={part.toolCallId}
+                part={part}
+                live={pending}
+                onDecision={(decision) => tools.onDecision(message.id, part.toolCallId, decision)}
+                onRetry={tools.onToolRetry}
+                retryDisabled={tools.busy}
+              />
+            ) : part.text === '' ? null : (
+              <StreamingMarkdown key={`text-${index}`} text={part.text} streaming={message.outcome !== 'complete'} />
+            ),
+          )
         )}
       </div>
       {message.outcome === 'stopped' && (
@@ -150,7 +183,7 @@ function AssistantMessage({ message }: { readonly message: ChatMessage }) {
   )
 }
 
-function MessageItem({ message }: { readonly message: ChatMessage }) {
+function MessageItem({ message, tools }: { readonly message: ChatMessage; readonly tools: ToolHandlers }) {
   const isUser = message.role === 'user'
   const time = formatTime(message.createdAt)
   return (
@@ -164,7 +197,7 @@ function MessageItem({ message }: { readonly message: ChatMessage }) {
         {isUser ? (
           <p className="wrap-anywhere whitespace-pre-wrap">{messageText(message)}</p>
         ) : (
-          <AssistantMessage message={message} />
+          <AssistantMessage message={message} tools={tools} />
         )}
       </div>
       <p className="mt-1 font-mono text-xs text-slate-600">
@@ -183,15 +216,18 @@ function MessageItem({ message }: { readonly message: ChatMessage }) {
 interface StarterChipsProps {
   readonly prompts: readonly StarterPrompt[]
   readonly disabled: boolean
-  readonly onPick: (prompt: string) => void
+  readonly onPick: (prompt: StarterPrompt) => void
   /** `wrap` in the empty state; `strip` is one row that scrolls sideways inside itself. */
   readonly layout: 'wrap' | 'strip'
+  /** Accessible name of the list. */
+  readonly label?: string
 }
 
-function StarterChips({ prompts, disabled, onPick, layout }: StarterChipsProps) {
+function StarterChips({ prompts, disabled, onPick, layout, label = 'Starter prompts' }: StarterChipsProps) {
+  if (prompts.length === 0) return null
   return (
     <ul
-      aria-label="Starter prompts"
+      aria-label={label}
       className={layout === 'wrap' ? 'flex flex-wrap gap-2' : 'flex gap-2 overflow-x-auto pb-1 whitespace-nowrap'}
     >
       {prompts.map((starter) => (
@@ -199,7 +235,7 @@ function StarterChips({ prompts, disabled, onPick, layout }: StarterChipsProps) 
           <button
             type="button"
             disabled={disabled}
-            onClick={() => onPick(starter.prompt)}
+            onClick={() => onPick(starter)}
             title={starter.prompt}
             className={`min-h-11 rounded-full border border-main bg-white px-3 text-left text-sm text-ink transition-colors duration-150 ease-out hover:bg-slate-100 disabled:border-slate-300 disabled:text-slate-500 motion-reduce:transition-none ${FOCUS_RING}`}
           >
@@ -215,7 +251,12 @@ function StarterChips({ prompts, disabled, onPick, layout }: StarterChipsProps) 
  * FE-08 first-run state: onboarding, not apology. It says what the copilot
  * checks, then offers four prompts that run in one click.
  */
-function OnboardingCard({ prompts, disabled, onPick }: Omit<StarterChipsProps, 'layout'>) {
+function OnboardingCard({
+  prompts,
+  toolPrompts,
+  disabled,
+  onPick,
+}: Omit<StarterChipsProps, 'layout' | 'label'> & { readonly toolPrompts: readonly StarterPrompt[] }) {
   return (
     <div className="mx-auto max-w-xl py-2" data-testid="copilot-onboarding">
       <h3 className="text-base font-semibold text-ink">What this copilot checks</h3>
@@ -240,6 +281,14 @@ function OnboardingCard({ prompts, disabled, onPick }: Omit<StarterChipsProps, '
       <div className="mt-2">
         <StarterChips prompts={prompts} disabled={disabled} onPick={onPick} layout="wrap" />
       </div>
+      {toolPrompts.length > 0 && (
+        <>
+          <p className="mt-4 text-sm font-semibold text-ink">Or call a tool and watch its card move through its 4 states:</p>
+          <div className="mt-2">
+            <StarterChips prompts={toolPrompts} disabled={disabled} onPick={onPick} layout="wrap" label="Tool demos" />
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -340,13 +389,15 @@ interface SabotageToolbarProps {
   readonly onArm: (choice: DrillChoice) => void
   readonly disabled: boolean
   readonly onCrash: () => void
+  /** FE-07: sends a tool call whose input fails its schema, in one click. Absent when no tool-error chip is configured. */
+  readonly onToolError?: () => void
 }
 
 /**
  * FE-08 drill toolbar: arm one failure for the next Send, without DevTools.
  * One shot: it disarms itself when the request goes out, so Retry is clean.
  */
-function SabotageToolbar({ armed, onArm, disabled, onCrash }: SabotageToolbarProps) {
+function SabotageToolbar({ armed, onArm, disabled, onCrash, onToolError }: SabotageToolbarProps) {
   return (
     <details className="border-b border-slate-200 bg-canvas px-3 sm:px-4" data-testid="sabotage-toolbar">
       <summary className={`flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-ink ${FOCUS_RING}`}>
@@ -386,6 +437,16 @@ function SabotageToolbar({ armed, onArm, disabled, onCrash }: SabotageToolbarPro
             )
           })}
         </div>
+        {onToolError !== undefined && (
+          <button
+            type="button"
+            onClick={onToolError}
+            disabled={disabled}
+            className={`mt-3 mr-2 min-h-11 rounded-md border border-amber-600 bg-white px-3 text-sm font-semibold text-ink hover:bg-amber-50 disabled:text-slate-500 ${FOCUS_RING}`}
+          >
+            Trigger Tool Execution Error (<code className="font-mono">output-error</code>)
+          </button>
+        )}
         <button
           type="button"
           onClick={onCrash}
@@ -419,7 +480,14 @@ interface ChatSessionProps extends StreamingUnderwritingChatProps {
   readonly persist: boolean
 }
 
-function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, initialMessages, persist }: ChatSessionProps) {
+function ChatSession({
+  starterPrompts,
+  toolPrompts = [],
+  engine,
+  transport = fetchChatTransport,
+  initialMessages,
+  persist,
+}: ChatSessionProps) {
   const [state, dispatch] = useReducer(chatReducer, initialMessages, createInitialState)
   const [draft, setDraft] = useState('')
   /** Tip 1: drives the "Jump to latest" pill. Set from scroll events only. */
@@ -519,7 +587,12 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
    * Retry. Every failure is dispatched with a kind, so the banner can name it.
    */
   const runRequest = useCallback(
-    (assistantId: string, history: ReturnType<typeof toWireHistory>, sabotage: SabotageMode | null): void => {
+    (
+      assistantId: string,
+      history: ReturnType<typeof toWireHistory>,
+      sabotage: SabotageMode | null,
+      toolCall: DirectToolCall | null = null,
+    ): void => {
       // Failure before send: no connection, or the network-drop drill. Nothing goes out.
       const offline = typeof navigator !== 'undefined' && navigator.onLine === false
       if (offline || sabotage === 'network-drop') {
@@ -562,10 +635,20 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
             release()
             dispatch({ type: 'FAIL', id: assistantId, message: event.message })
             break
+          default:
+            // FE-07 tool lifecycle frames. `at` is taken here so the reducer stays pure.
+            dispatch({ type: 'TOOL', id: assistantId, event, at: Date.now() })
+            break
         }
       }
 
-      transport({ messages: history, signal: controller.signal, onEvent, ...(sabotage === null ? {} : { sabotage }) }).then(
+      transport({
+        messages: history,
+        signal: controller.signal,
+        onEvent,
+        ...(sabotage === null ? {} : { sabotage }),
+        ...(toolCall === null ? {} : { toolCall }),
+      }).then(
         () => {
           release()
           if (!settled && !controller.signal.aborted) {
@@ -601,7 +684,7 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
   )
 
   const send = useCallback(
-    (raw: string): void => {
+    (raw: string, options: { readonly drill?: SabotageMode; readonly toolCall?: DirectToolCall } = {}): void => {
       const text = raw.trim()
       if (text === '') {
         // FE-08 edge case: whitespace only is never sent, and the field says why.
@@ -624,7 +707,8 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
       // until the first token is appended to it (Tip 3).
       const assistant = newPendingReply(createdAt)
       const history = toWireHistory([...state.messages, user])
-      const sabotage = drill === 'off' ? null : drill
+      // A chip that is itself a drill wins; otherwise the armed drill (one shot) applies.
+      const sabotage = options.drill ?? (drill === 'off' ? null : drill)
 
       // Sending is an explicit "take me to the latest", even if the user had scrolled up.
       forceFollowRef.current = true
@@ -635,10 +719,23 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
       dispatch({ type: 'SUBMIT', user, assistant })
       // The question survives a reload even if the tab closes mid-reply.
       saveConversation([...state.messages, user])
-      runRequest(assistant.id, history, sabotage)
+      runRequest(assistant.id, history, sabotage, options.toolCall ?? null)
     },
     [busy, state.messages, drill, runRequest],
   )
+
+  /** A chip: its prompt, and its drill if it carries one. */
+  const pick = (starter: StarterPrompt): void => send(starter.prompt, starter.drill === undefined ? {} : { drill: starter.drill })
+
+  /** FE-07 tool handlers for the cards. */
+  const toolHandlers: ToolHandlers = {
+    busy,
+    onDecision: (messageId, toolCallId, decision) => dispatch({ type: 'TOOL_DECISION', messageId, toolCallId, decision }),
+    // "Retry Tool Call with Sanitized Inputs": a new turn that runs exactly that tool with the fixed input.
+    onToolRetry: (toolName, input, changes) =>
+      send(`Retry ${toolName} with sanitized inputs (${changes}).`, { toolCall: { toolName, input } }),
+  }
+  const toolErrorChip = toolPrompts.find((prompt) => prompt.drill === 'tool-error')
 
   /**
    * FE-08 "Retry with a brain": re-sends only the failed turn's prompt, writes
@@ -736,7 +833,13 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
         </button>
       </header>
 
-      <SabotageToolbar armed={drill} onArm={setDrill} disabled={busy} onCrash={() => setCrash(true)} />
+      <SabotageToolbar
+        armed={drill}
+        onArm={setDrill}
+        disabled={busy}
+        onCrash={() => setCrash(true)}
+        {...(toolErrorChip === undefined ? {} : { onToolError: () => pick(toolErrorChip) })}
+      />
       {crash && <RenderErrorDrill />}
 
       <div className="relative min-h-0 flex-1">
@@ -755,11 +858,11 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
           {hasMessages ? (
             <ol className="space-y-4">
               {state.messages.map((message) => (
-                <MessageItem key={message.id} message={message} />
+                <MessageItem key={message.id} message={message} tools={toolHandlers} />
               ))}
             </ol>
           ) : (
-            <OnboardingCard prompts={starterPrompts} disabled={busy} onPick={send} />
+            <OnboardingCard prompts={starterPrompts} toolPrompts={toolPrompts} disabled={busy} onPick={pick} />
           )}
           {state.failure !== null && failedPrompt !== null && (
             <FailureBanner
@@ -796,7 +899,7 @@ function ChatSession({ starterPrompts, engine, transport = fetchChatTransport, i
       >
         {hasMessages && (
           <div className="mb-2">
-            <StarterChips prompts={starterPrompts} disabled={busy} onPick={send} layout="strip" />
+            <StarterChips prompts={[...starterPrompts, ...toolPrompts]} disabled={busy} onPick={pick} layout="strip" />
           </div>
         )}
         <label htmlFor={INPUT_ID} className="block text-sm font-semibold text-ink">

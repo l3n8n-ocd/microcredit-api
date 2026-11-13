@@ -26,11 +26,29 @@ export interface EngineInfo {
   readonly label: string
 }
 
+/**
+ * FE-07 tool lifecycle frames, named after the AI SDK's UI stream chunks. One
+ * tool call moves through them in order, keyed by `toolCallId`:
+ *
+ *   tool-input-start ─▶ tool-input-delta × N ─▶ tool-input-available ─┬─▶ tool-output-available
+ *   (input-streaming)   (input-streaming)       (input-available)      └─▶ tool-output-error
+ *
+ * `input` and `output` are `unknown` on the wire: the browser validates them
+ * against the tool's Zod schemas (src/lib/ai/tools.ts) before drawing them.
+ */
+export type ToolStreamEvent =
+  | { readonly type: 'tool-input-start'; readonly toolCallId: string; readonly toolName: string; readonly rationale: string }
+  | { readonly type: 'tool-input-delta'; readonly toolCallId: string; readonly delta: string }
+  | { readonly type: 'tool-input-available'; readonly toolCallId: string; readonly toolName: string; readonly input: unknown }
+  | { readonly type: 'tool-output-available'; readonly toolCallId: string; readonly output: unknown }
+  | { readonly type: 'tool-output-error'; readonly toolCallId: string; readonly errorCode: string; readonly errorText: string }
+
 export type ChatStreamEvent =
   | { readonly type: 'meta'; readonly engine: EngineInfo }
   | { readonly type: 'token'; readonly text: string }
   | { readonly type: 'done'; readonly finishReason: string }
   | { readonly type: 'error'; readonly message: string }
+  | ToolStreamEvent
 
 /**
  * Hard caps, enforced on both sides. `/api/chat` is public and unauthenticated,
@@ -54,7 +72,7 @@ export const CHAT_LIMITS = {
  * `network-drop` never reaches the server. The browser fails it before `fetch`,
  * which is the point: nothing was sent.
  */
-export const SABOTAGE_MODES = ['mid-stream-error', 'rate-limit-429', 'malformed-tool-json', 'slow-3s', 'network-drop'] as const
+export const SABOTAGE_MODES = ['mid-stream-error', 'rate-limit-429', 'malformed-tool-json', 'slow-3s', 'network-drop', 'tool-error'] as const
 export type SabotageMode = (typeof SABOTAGE_MODES)[number]
 export const SABOTAGE_HEADER = 'x-sabotage-mode'
 
@@ -89,6 +107,16 @@ export function isChatStreamEvent(value: unknown): value is ChatStreamEvent {
       return typeof value.finishReason === 'string'
     case 'error':
       return typeof value.message === 'string'
+    case 'tool-input-start':
+      return typeof value.toolCallId === 'string' && typeof value.toolName === 'string' && typeof value.rationale === 'string'
+    case 'tool-input-delta':
+      return typeof value.toolCallId === 'string' && typeof value.delta === 'string'
+    case 'tool-input-available':
+      return typeof value.toolCallId === 'string' && typeof value.toolName === 'string' && 'input' in value
+    case 'tool-output-available':
+      return typeof value.toolCallId === 'string' && 'output' in value
+    case 'tool-output-error':
+      return typeof value.toolCallId === 'string' && typeof value.errorCode === 'string' && typeof value.errorText === 'string'
     default:
       return false
   }
@@ -144,8 +172,23 @@ export function isRequestId(value: unknown): value is string {
   return typeof value === 'string' && REQUEST_ID.test(value)
 }
 
+/**
+ * FE-07 "Retry Tool Call with Sanitized Inputs": the browser names one tool and
+ * its corrected input. The server re-validates it with Zod and runs only that
+ * tool; no model is called.
+ */
+export interface DirectToolCall {
+  readonly toolName: string
+  readonly input: Readonly<Record<string, unknown>>
+}
+
 export type ChatRequestParse =
-  | { readonly ok: true; readonly messages: readonly WireMessage[]; readonly requestId: string | null }
+  | {
+      readonly ok: true
+      readonly messages: readonly WireMessage[]
+      readonly requestId: string | null
+      readonly toolCall: DirectToolCall | null
+    }
   | { readonly ok: false; readonly error: string }
 
 /**
@@ -177,5 +220,13 @@ export function parseChatRequest(body: unknown): ChatRequestParse {
   }
 
   if (messages.at(-1)?.role !== 'user') return { ok: false, error: 'The last message must be from the user.' }
-  return { ok: true, messages, requestId: isRequestId(body.requestId) ? body.requestId : null }
+  let toolCall: DirectToolCall | null = null
+  if (body.toolCall !== undefined) {
+    const call = body.toolCall
+    if (!isRecord(call) || typeof call.toolName !== 'string' || !isRecord(call.input) || Array.isArray(call.input)) {
+      return { ok: false, error: 'toolCall must be { "toolName": string, "input": object }.' }
+    }
+    toolCall = { toolName: call.toolName, input: call.input }
+  }
+  return { ok: true, messages, requestId: isRequestId(body.requestId) ? body.requestId : null, toolCall }
 }
