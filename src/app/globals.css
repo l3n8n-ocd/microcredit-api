@@ -74,3 +74,174 @@
     opacity: 0.6;
   }
 }
+
+/*
+ * FE-AA1 · SmartActionButton motion tokens (src/components/ui/SmartActionButton.tsx).
+ * The one documented exception to the 150 ms cap (CLAUDE.md §12 rule 4,
+ * docs/PORTFOLIO_DESIGN_SYSTEM.md "Motion: SmartActionButton"). Only `transform`
+ * and `opacity` animate; the surface colour changes by crossfading stacked
+ * layers, never by animating `background-color`. The button writes the
+ * reduced-motion values (no shift, no scale, no shake, 120 ms fades) as inline
+ * variables, so the same rules serve the OS setting and the on-page toggle.
+ */
+:root {
+  --motion-press: 100ms;
+  --ease-press: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-swap: 220ms;
+  --ease-swap: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-confirm: 240ms;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-shake: 320ms;
+  --ease-shake: cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  --motion-reduced: 120ms;
+}
+
+/* Damped, one-shot, horizontal only. Never loops. */
+@keyframes smart-shake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  20% {
+    transform: translate3d(-5px, 0, 0);
+  }
+  40% {
+    transform: translate3d(5px, 0, 0);
+  }
+  60% {
+    transform: translate3d(-3px, 0, 0);
+  }
+  80% {
+    transform: translate3d(2px, 0, 0);
+  }
+}
+
+.smart-btn {
+  /* Defaults; the component overrides these inline (reduced motion sets them to 0 / none / 120 ms). */
+  --smart-lift: 1px;
+  --smart-press: 0.97;
+  --smart-shift: 10px;
+  --smart-swap: var(--motion-swap);
+  --smart-confirm: var(--motion-confirm);
+  --smart-shake-name: smart-shake;
+  display: inline-grid;
+  grid-template-areas: 'stack';
+  transform: translate3d(0, 0, 0);
+  transition: transform var(--motion-press) var(--ease-press);
+}
+
+.smart-btn > * {
+  grid-area: stack;
+}
+
+.smart-btn:not(:disabled):hover,
+.smart-btn:not(:disabled):focus-visible {
+  transform: translate3d(0, calc(-1 * var(--smart-lift)), 0);
+}
+
+.smart-btn:not(:disabled):active {
+  transform: scale3d(var(--smart-press), var(--smart-press), 1);
+}
+
+.smart-btn[data-state='error'] {
+  animation: var(--smart-shake-name) var(--motion-shake) var(--ease-shake) 1;
+}
+
+/* Surfaces: one per state, crossfaded by opacity. */
+.smart-surface {
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity var(--smart-swap) var(--ease-swap);
+}
+
+.smart-surface[data-on='true'] {
+  opacity: 1;
+}
+
+/* Label layers: the outgoing one rises and fades, the incoming one rises in from below. */
+.smart-layer {
+  opacity: 0;
+  transform: translate3d(0, var(--smart-shift), 0);
+  transition:
+    opacity var(--smart-swap) var(--ease-swap),
+    transform var(--smart-swap) var(--ease-swap);
+}
+
+.smart-layer[data-layer-state='active'] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.smart-layer[data-layer-state='leaving'] {
+  transform: translate3d(0, calc(-1 * var(--smart-shift)), 0);
+}
+
+/* Success lands with a slight spring overshoot, then the check draws itself. */
+.smart-layer[data-layer='success'][data-layer-state='active'] {
+  transition:
+    opacity var(--smart-confirm) var(--ease-spring),
+    transform var(--smart-confirm) var(--ease-spring);
+}
+
+.smart-layer[data-layer='success']:not([data-layer-state='active']) {
+  transform: translate3d(0, var(--smart-shift), 0) scale3d(0.92, 0.92, 1);
+}
+
+.smart-check {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  transition: stroke-dashoffset var(--smart-confirm) var(--ease-spring);
+}
+
+.smart-layer[data-layer='success'][data-layer-state='active'] .smart-check {
+  stroke-dashoffset: 0;
+}
+
+/* The loading dots take the label colour on a dark surface. */
+.smart-btn .copilot-dot {
+  background-color: currentColor;
+}
+
+/* Shared press/hover language for the app's other primary buttons. 100 ms, inside the 150 ms cap. */
+/* Colour keeps the app-wide 150 ms ease-out (§12 rule 4); only the transform uses the press token. */
+.smart-press {
+  transition:
+    transform var(--motion-press) var(--ease-press),
+    background-color 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+.smart-press:not(:disabled):hover,
+.smart-press:not(:disabled):focus-visible {
+  transform: translate3d(0, -1px, 0);
+}
+
+.smart-press:not(:disabled):active {
+  transform: scale3d(0.97, 0.97, 1);
+}
+
+/* The OS setting, for first paint and for anything that does not read it in JS. */
+@media (prefers-reduced-motion: reduce) {
+  /* !important: the server-rendered inline variables (full motion) must not win before hydration. */
+  .smart-btn,
+  .smart-press {
+    --smart-lift: 0px !important;
+    --smart-press: 1 !important;
+    --smart-shift: 0px !important;
+    --smart-swap: var(--motion-reduced) !important;
+    --smart-confirm: var(--motion-reduced) !important;
+    --smart-shake-name: none !important;
+    transition: none;
+  }
+
+  .smart-press:not(:disabled):hover,
+  .smart-press:not(:disabled):focus-visible,
+  .smart-press:not(:disabled):active {
+    transform: none;
+  }
+
+  .smart-check {
+    transition: none;
+  }
+}

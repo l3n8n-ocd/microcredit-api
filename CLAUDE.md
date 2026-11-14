@@ -80,13 +80,13 @@ lint-staged + commitlint (git hooks), GitHub Actions (CI). Capstone spec: [`SPEC
 | `npm run dev`       | Start the Next.js dev server (App Router)                  |
 | `npm run typecheck` | Strict-mode type check (`tsc --noEmit`)                    |
 | `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports except Next route files)|
-| `npm test`          | Run Vitest once (473 tests in `src/`, `playground/`, `agents/`) |
+| `npm test`          | Run Vitest once (497 tests in `src/`, `playground/`, `agents/`) |
 | `npm run build`     | Production build (`next build`)                            |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
 | `npm run test:e2e:fe08` | FE-08: after `build`, the sabotage drill (32 browser checks) and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e:fe07` | FE-07: after `build`, the tool cards (14 browser checks) and the 6 tool-state screenshots |
-| `npm run test:e2e`  | After `build`: Playwright primary flow `e2e/primary-flow.spec.ts` (`playwright test`, `next start`, mocked `/api/chat`) |
+| `npm run test:e2e`  | After `build`: Playwright `e2e/*.spec.ts`, the primary flow and `/motion-lab` (`playwright test`, `next start`, mocked `/api/chat`) |
 | `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes responsive at 375px/1280px, the AI Copilot streaming / Stop / scroll checks, and keyboard-only checks on `/playground` |
 
 **Before saying any change is done, run `typecheck`, `lint`, and `test`, and
@@ -452,6 +452,12 @@ upstages it.
    `prefers-reduced-motion`. *One exception:* the AI Copilot's "thinking" dots (`.copilot-dot` in
    `src/app/globals.css`) loop while a request is in flight. They report a state, they are not
    decoration, and they are static under `prefers-reduced-motion`. No second looping animation.
+   *Scoped duration exception (FE-AA1):* `SmartActionButton` (`src/components/ui/SmartActionButton.tsx`)
+   only: press 100 ms, label swap 220 ms, success spring 240 ms, error shake 320 ms (one shot, never
+   loops), success hold 1400 ms. Transform and opacity only. Under reduced motion it drops to a 120 ms
+   opacity crossfade with no translate, scale or shake. The shared `.smart-press` class may reuse the
+   100 ms press transform on other primary buttons; colour still transitions at 150 ms. Nothing else
+   goes past 150 ms. Tokens and reasons: `docs/PORTFOLIO_DESIGN_SYSTEM.md` "Motion: SmartActionButton".
 5. **A new token, font or hue needs a reason in the design system doc first**, in the same commit.
 
 *Check:* this prints nothing.

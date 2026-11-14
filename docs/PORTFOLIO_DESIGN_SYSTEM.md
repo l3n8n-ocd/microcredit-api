@@ -94,9 +94,32 @@ Rules that follow from the table:
   - one functional exception (FE-06): the AI Copilot's "thinking" dots loop while a request is in
     flight, because "waiting for the first token" is a state the user must see. They are static under
     `prefers-reduced-motion`, where the "Thinking…" text carries the meaning.
+  - one scoped duration exception (FE-AA1): the SmartActionButton. See "Motion: SmartActionButton" below.
 - **Same skeleton for every case:** Problem → What I Did & Decided → What Came of It, as in
   [`FRAME_IT_AS_CASES.md` §3](./FRAME_IT_AS_CASES.md#3--the-framed-case-studies). The reader learns the
   layout once.
+
+
+### Motion: SmartActionButton (FE-AA1 scoped exception)
+
+The 150 ms cap holds everywhere except this one component,
+[`src/components/ui/SmartActionButton.tsx`](../src/components/ui/SmartActionButton.tsx). Its job is to report
+a payout's state, and four of those states need more than 150 ms to be read. Tokens live on `:root` in
+`src/app/globals.css`:
+
+| Token | Value | Used for | Why |
+| --- | --- | --- | --- |
+| `--motion-press` / `--ease-press` | `100ms cubic-bezier(0.22, 1, 0.36, 1)` | hover lift (−1 px), press (`scale3d(0.97, 0.97, 1)`) | Answers the finger before the network does. |
+| `--motion-swap` / `--ease-swap` | `220ms cubic-bezier(0.16, 1, 0.3, 1)` | label out (up 10 px, fade) and in (from below), surface crossfade | Long enough to see the label change; a 600 ms reply never waits on it. |
+| `--motion-confirm` / `--ease-spring` | `240ms cubic-bezier(0.34, 1.56, 0.64, 1)` | success label and the `stroke-dashoffset` checkmark | The only overshoot in the system marks the payout landing. |
+| `--motion-shake` / `--ease-shake` | `320ms cubic-bezier(0.36, 0.07, 0.19, 0.97)` | one `smart-shake` (−5 → 5 → −3 → 2 → 0 px) | Says no once. The label and the cross carry the meaning. |
+| `--motion-reduced` | `120ms` | every change under reduced motion | Opacity only: no translate, scale or shake. |
+
+Success holds for 1400 ms, then returns to idle. Colours: success is the `accent` fill under `ink` text
+(4.74:1); error is `rose-700` under white (red stays banned); the focus ring is `accent`. The loading
+indicator reuses the `.copilot-dot` trio, so there is still one looping animation. The `.smart-press` class
+lends the 100 ms press transform to the Disburse, chat Send and "Approve & Execute Payout" buttons. Their
+colour transitions stay at 150 ms.
 
 ---
 

@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { href: '/portfolio', label: 'Portfolio' },
   { href: '/playground', label: 'Playground' },
   { href: '/agent', label: 'Agent' },
+  { href: '/motion-lab', label: 'Motion Lab' },
 ] as const
 
 /**

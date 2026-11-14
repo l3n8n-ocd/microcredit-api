@@ -151,12 +151,12 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (473 tests)                |
+| `npm test`          | Run the Vitest suite once (497 tests)                |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
 | `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 32 browser checks and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e:fe07` | After `build`: FE-07 tool cards, 14 browser checks and the 6 tool-state screenshots |
-| `npm run test:e2e`  | After `build`: the Playwright primary flow (`e2e/primary-flow.spec.ts`): Disburse replay, then the copilot with a tool card, mocked `/api/chat` |
+| `npm run test:e2e`  | After `build`: Playwright (`e2e/*.spec.ts`): the primary flow (Disburse replay, then the copilot with a tool card, mocked `/api/chat`) and the FE-AA1 `/motion-lab` checks |
 | `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes at 375px/1280px with no overflow, and the AI Copilot streaming checks |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -409,6 +409,24 @@ or chip) reaches `output-error` on demand.
     tests (49 queries). `npm test` 473/473.
   - **`npm run test:e2e`** walks `/` → replay → `/underwriting` → tool card with zero console errors. CI runs
     typecheck, lint, Vitest, build, then Playwright on every push and pull request to `main`.
+- **FE-AA1 · Buttons with a Brain (Motion & State Micro-interactions):** [`/motion-lab`](https://microcredit-api-beta.vercel.app/motion-lab) · [`src/components/ui/SmartActionButton.tsx`](./src/components/ui/SmartActionButton.tsx) · [`docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md`](./docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md)
+  - **One button, six states plus `disabled`:** `idle` → `loading` → `success` (1400 ms hold) → `idle`, or
+    `loading` → `error` → retry. "Disburse ₱5,000.00" becomes "Locking Idempotency-Key...", then
+    "201 Disbursed · ₱5,000.00" or "409 Conflict · Retry Payout". The lab outcomes are simulated; no ledger is touched.
+  - **Duration & easing:** press `100ms cubic-bezier(0.22, 1, 0.36, 1)`; label swap `220ms cubic-bezier(0.16, 1, 0.3, 1)`;
+    success spring `240ms cubic-bezier(0.34, 1.56, 0.64, 1)`; one error shake `320ms cubic-bezier(0.36, 0.07, 0.19, 0.97)`.
+    Reduced motion keeps colour, icon and text with a `120ms` opacity fade. These pass the 150 ms cap only for this
+    component: the scoped exception is in CLAUDE.md §12 rule 4.
+  - **Compositor-only:** every label and surface shares one grid cell (`grid-template-areas: 'stack'`), so the box
+    never changes size. Only `transform` and `opacity` transition; colour changes by crossfading stacked surfaces.
+    The lab reads 18/18 layers as transform / opacity only, and a full run records 0 layout shift in Chromium.
+  - **Interruptible:** a click while `loading` or `success` is ignored, decided from a ref, so "Fire 10 Rapid Clicks"
+    starts 1 run and counts 9 ignored. Each run has a `runId` and an `AbortController`; pinning a state or unmounting
+    aborts it and clears the hold timer. Mutation check: remove the guard and 3 tests fail.
+  - **Reduced motion two ways:** the `prefers-reduced-motion` media query and an on-page toggle both zero every
+    shift, scale and shake. The 100 ms press token also runs on the real Disburse, chat Send and
+    "Approve & Execute Payout" buttons.
+  - `npm test` 497/497 (24 new); `npm run test:e2e` adds 5 browser checks ([`e2e/motion-lab.spec.ts`](./e2e/motion-lab.spec.ts)).
 
 ## License
 

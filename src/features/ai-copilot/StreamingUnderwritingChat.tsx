@@ -930,7 +930,7 @@ function ChatSession({
             type="submit"
             disabled={!busy && !canSend}
             data-state={busy ? 'stop' : 'send'}
-            className={`min-h-11 w-20 shrink-0 rounded-md border border-main px-3 text-sm font-semibold transition-colors duration-150 ease-out motion-reduce:transition-none ${
+            className={`smart-press min-h-11 w-20 shrink-0 rounded-md border border-main px-3 text-sm font-semibold motion-reduce:transition-none ${
               busy
                 ? 'bg-white text-ink hover:bg-slate-100'
                 : 'bg-main text-white hover:bg-slate-700 disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500'

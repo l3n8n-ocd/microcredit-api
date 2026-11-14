@@ -423,7 +423,7 @@ function ProposalConfirm({
             disabled={busy}
             aria-busy={busy ? 'true' : 'false'}
             onClick={() => void run(() => executeProposal(proposal))}
-            className={`${button} border-main bg-main text-white hover:bg-slate-700`}
+            className={`smart-press ${button} border-main bg-main text-white hover:bg-slate-700`}
           >
             {busy ? 'Sending once…' : 'Approve & Execute Payout'}
           </button>

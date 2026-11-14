@@ -29,13 +29,14 @@ Server Components by default; `'use client'` only on interactive leaves.
 | `/advisories` | `src/app/advisories/page.tsx` | Server Component | Concurrency + security guardrail monitor (`Idempotency-Key` replay, `409` version checks, sanitized advisory format) |
 | `/health` | `src/app/health/page.tsx` + `src/app/api/health/route.ts` | Async Server Component fetches the route handler | Live system / env / ledger-invariant health check |
 | `/playground` | `src/app/playground/page.tsx` | Static Server Component + client islands from [`playground/`](./playground/) and `src/features/playground/` | ✅ FE-03 / FE-05 coursework, not a product screen: hand-built APG modal, tabs and disclosure next to their shadcn/ui equivalents. Write-up: [`NOTES.md`](./NOTES.md) |
+| `/motion-lab` | `src/app/motion-lab/page.tsx` | Static Server Component + client island `src/features/motion-lab/MotionLab.tsx` | ✅ FE-AA1 coursework: the 6-state `SmartActionButton`, a state scrubber, a live inspector and the duration & easing rationale. Outcomes are simulated. Write-up: [`docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md`](./docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md) |
 | `POST` / `DELETE` / `GET /api/chat` | `src/app/api/chat/route.ts` | Route handler, Node runtime, Server-Sent Events; `DELETE` cancels one reply by request ID; `GET` returns counters | ✅ FE-06 streaming endpoint: AI SDK `streamText` when a server-only key is set, local rule engine otherwise |
 
 ## Architecture notes
 
 - **Domain stays framework-free.** All business logic lives in `src/features/` (`disbursement`,
   `scoring`, `health`) and `src/utils/`, imported by both Server and Client components. The suite is
-  473 tests: 256 on the domain and UI; 150 on the FE-06 chat, its FE-07 tools and cards, its FE-08 sabotage
+  497 tests: 256 on the domain and UI; 24 on the FE-AA1 SmartActionButton and `/motion-lab` workbench; 150 on the FE-06 chat, its FE-07 tools and cards, its FE-08 sabotage
   drills, its rate limiter and its env handling (`src/features/ai-copilot/`, `src/lib/ai/`, `src/utils/env.ts`);
   12 in the FE-09 testing pass (`src/features/__tests__/`); 40 keyboard tests on the FE-03 / FE-05 components
   in `playground/`; and 15 on the FL-07 SentinelScout agent in `agents/`.
@@ -89,7 +90,7 @@ same functions, and FE-07 tools will replace that snapshot (`CLAUDE.md` §9.2 ru
 
 ## Testing
 
-- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 473 tests),
+- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 497 tests),
   `npm run build` (next build), `npm run test:e2e` (Playwright: above-the-fold on `/` under the
   worst-case fallback font, all 5 routes at 375px and 1280px with zero horizontal overflow, and 14 AI
   Copilot checks per width against the real `/api/chat`: token-by-token streaming, Stop, server-confirmed

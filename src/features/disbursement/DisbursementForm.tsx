@@ -370,7 +370,7 @@ export function DisbursementForm({
             type="submit"
             disabled={inFlight}
             aria-busy={inFlight}
-            className="rounded-md bg-emerald-400 px-5 py-2 font-semibold text-slate-950 hover:bg-emerald-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-200 disabled:cursor-not-allowed disabled:bg-slate-500"
+            className="smart-press rounded-md bg-emerald-400 px-5 py-2 font-semibold text-slate-950 hover:bg-emerald-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-200 disabled:cursor-not-allowed disabled:bg-slate-500"
           >
             {inFlight ? 'Disbursing…' : 'Disburse'}
           </button>
