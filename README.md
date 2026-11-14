@@ -409,6 +409,16 @@ or chip) reaches `output-error` on demand.
     tests (49 queries). `npm test` 473/473.
   - **`npm run test:e2e`** walks `/` → replay → `/underwriting` → tool card with zero console errors. CI runs
     typecheck, lint, Vitest, build, then Playwright on every push and pull request to `main`.
+- **FL-CAP · Keep the Habit (General AI Fluency capstone):** [`docs/FL-CAP_KEEP_THE_HABIT.md`](./docs/FL-CAP_KEEP_THE_HABIT.md) · [portfolio `CLAUDE.md`](https://github.com/l3n8n-ocd/portfolio/blob/main/CLAUDE.md) · [`add-next-case-study.ics`](https://github.com/l3n8n-ocd/portfolio/blob/main/docs/reminders/add-next-case-study.ics)
+  - **4-step runbook:**
+    1. capture one real artifact;
+    2. draft the three beats with the 6-line prompt;
+    3. slot the card into `CASES` in the portfolio's `src/components/CapstoneAndProjects.tsx`;
+    4. `npm run build`, the 375 px check, push.
+  - **Named next case:** Case 04, SentinelScout. Its copy cites `agent:eval` 6/6 and the real
+    `GHSA-2464-fhr4-w9xw` triage (4 tool calls, 6,014 ms). Time saved is a TODO, not a number.
+  - **Reminder:** a monthly `.ics` event on the last Sunday at 8:00 PM PHT, from Nov 29, 2026. It has a
+    30-minute alert and parses as 1 `VEVENT` and 1 `VALARM`. This repo's `CLAUDE.md` §14 points to all of it.
 - **FE-AA1 · Buttons with a Brain (Motion & State Micro-interactions):** [`/motion-lab`](https://microcredit-api-beta.vercel.app/motion-lab) · [`src/components/ui/SmartActionButton.tsx`](./src/components/ui/SmartActionButton.tsx) · [`docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md`](./docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md)
   - **One button, six states plus `disabled`:** `idle` → `loading` → `success` (1400 ms hold) → `idle`, or
     `loading` → `error` → retry. "Disburse ₱5,000.00" becomes "Locking Idempotency-Key...", then

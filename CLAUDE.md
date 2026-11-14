@@ -483,3 +483,30 @@ Load these three artifacts every session; they are the portfolio build's single 
 - **Consolidated pack:** [`docs/EMPTY_BUT_LIVE.md`](./docs/EMPTY_BUT_LIVE.md) §2 has all three combined as
   one copy-paste Master Context Block for the Claude Project.
 - The portfolio headline is the §9.5 canonical claim; contact is GitHub-only (no email).
+
+---
+
+## 14. Keep the Habit (FL-CAP): adding the next portfolio case
+
+Source of truth: [`CLAUDE.md` in `l3n8n-ocd/portfolio`](https://github.com/l3n8n-ocd/portfolio/blob/main/CLAUDE.md)
+and [`docs/FL-CAP_KEEP_THE_HABIT.md`](./docs/FL-CAP_KEEP_THE_HABIT.md) (a synced copy; the portfolio copy
+wins).
+
+- **Where cases live:** `CASES: CaseStudy[]` in the portfolio's `src/components/CapstoneAndProjects.tsx`.
+  `impact` is the plain-English outcome line and is shown first. `facts` holds Beat 1, Beat 2 (1–2 items)
+  and Beat 3.
+- **Rules:**
+  - MicroCredit API stays case `01`.
+  - At most 4 cases in the main grid.
+  - One primary button on the page: emerald "Book a 15-min walkthrough".
+  - Every number on a card points to evidence here. No evidence means a TODO (§9.2 rule 4).
+- **Next case:** Case 04, SentinelScout (FL-06 / FL-07, [`docs/FL-07_BUILD_LOG.md`](./docs/FL-07_BUILD_LOG.md)),
+  is drafted in the FL-CAP doc §2. Queued: Case 05, an AWS IAM / VPC / KMS lab series, not built yet.
+- **The portfolio is not on the Identity Kit (§9.4).**
+  - It runs `#050816` dark / `#edf2ff` light, a violet `--primary`, Inter + JetBrains Mono, and an emerald
+    `#10b981` CTA under `#022c22` text.
+  - Moving it onto the Identity Kit is a separate design change. Do not slip it into a case-study commit.
+- **Reminder:** the last Sunday of every month, 8:00 PM PHT, starting Nov 29, 2026, from the portfolio's
+  `docs/reminders/add-next-case-study.ics`.
+- **Next-case prompt:** the 6-line prompt in the portfolio `CLAUDE.md` §6. Run it in the portfolio repo,
+  not here.
