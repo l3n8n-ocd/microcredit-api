@@ -219,7 +219,7 @@ Write-up: [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md).
 | Lens | Result |
 | --- | --- |
 | Bundle isolation | `three` lives in one lazy chunk behind `next/dynamic(..., { ssr: false })`. `/` and `/underwriting` load 0 scripts containing Three.js (checked in [`e2e/three-d-lab.spec.ts`](./e2e/three-d-lab.spec.ts)). `/` fetches it only after a click. |
-| Chunk size | 1 file: 180.4 KB compressed (gzip), 715.4 KB of JavaScript. It is requested after the page's `load` event. |
+| Chunk size | 1 file, 715.4 KB of JavaScript: 185.5 KB live (Brotli on Vercel), 180.4 KB on `next start` (gzip). It is requested after the page's `load` event. |
 | Network for the model | 0 requests: no model, texture or HDR file. The 245 KB Draco decoder is fetched only for a Draco-compressed drop. |
 | First frame | 244–319 ms after the canvas mounts (5 cold loads, localhost). |
 | Scene cost | 13 draw calls, 7,632 triangles, 0.23–0.42 ms of render CPU per frame. |

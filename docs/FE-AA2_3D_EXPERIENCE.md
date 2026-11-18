@@ -70,8 +70,17 @@ CPU work is under 0.5 ms a frame. That number says nothing about a laptop or a p
 2. leave it running for 10 seconds;
 3. copy the HUD's FPS and "Frame / render" values here, with the device names.
 
-**Live network numbers: TODO.** The sizes above are `next start` gzip. Vercel serves Brotli, so the
-live chunk will be smaller. Measure it in the live HUD after deploy.
+**Live numbers (Vercel, commit `7174c2e`).** Measured from the build container with headless Chromium,
+3 cold loads of https://microcredit-api-beta.vercel.app/3d-lab:
+
+| What | Live |
+| --- | --- |
+| Lazy chunk | 1 file, Brotli, 185.5 KB on the wire (189,948 bytes), 715.4 KB decoded. Slightly larger than `next start`'s gzip (180.4 KB): Vercel's Brotli level did not beat it here. |
+| Page `load` event | 597–1,146 ms |
+| Chunk download | requested 17–47 ms after `load`, done 141–191 ms later |
+| First frame | 237–322 ms after the canvas mounts |
+| Three.js on live `/` and `/underwriting` | 0 scripts |
+| Console errors | 0 |
 
 **Draco: TODO.** The decoder is wired and served (`/draco/draco_decoder.wasm` answers 200, 192,420
 bytes), but no test drops a Draco-compressed `.glb` yet.
