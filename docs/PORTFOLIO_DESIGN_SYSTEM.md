@@ -95,6 +95,7 @@ Rules that follow from the table:
     flight, because "waiting for the first token" is a state the user must see. They are static under
     `prefers-reduced-motion`, where the "Thinking…" text carries the meaning.
   - one scoped duration exception (FE-AA1): the SmartActionButton. See "Motion: SmartActionButton" below.
+  - one scoped 3D exception (FE-AA2): the WebGL canvas on `/3d-lab`. See "Motion: 3D lab canvas" below.
 - **Same skeleton for every case:** Problem → What I Did & Decided → What Came of It, as in
   [`FRAME_IT_AS_CASES.md` §3](./FRAME_IT_AS_CASES.md#3--the-framed-case-studies). The reader learns the
   layout once.
@@ -120,6 +121,29 @@ Success holds for 1400 ms, then returns to idle. Colours: success is the `accent
 indicator reuses the `.copilot-dot` trio, so there is still one looping animation. The `.smart-press` class
 lends the 100 ms press transform to the Disburse, chat Send and "Approve & Execute Payout" buttons. Their
 colour transitions stay at 150 ms.
+
+
+### Motion: 3D lab canvas (FE-AA2 scoped exception)
+
+The WebGL canvas in [`src/features/three-d/`](../src/features/three-d/) is the only other place motion
+passes 150 ms. Its job is to act out the `201` / `409` outcomes on a 3D terminal.
+
+| Motion | Length | Loops? | Rule |
+| --- | --- | --- | --- |
+| Auto-rotate (`OrbitControls.autoRotateSpeed`) | continuous | only if the viewer sets the slider above 0 | Defaults to 0, so the page is still on arrival. |
+| "Request in flight" amber glow | 350 ms | no | Amber means Simulate / replay. |
+| `201` ring spin + badge rise | 1.4 s after the in-flight phase (1.75 s in all) | no | Emerald, next to a pass. Holds still afterwards. |
+| `409` rose pulse + shutter drop | 0.9 s after the in-flight phase | no | Rose, next to a bounce. The shutter stays down. |
+| Pointer tilt | eased toward the pointer | no | Can be switched off. |
+| Damped orbit after a drag | follows the viewer's hand | no | Direct manipulation, not decoration. |
+
+- Under `prefers-reduced-motion: reduce` the canvas is never created. An SVG blueprint shows the same
+  paint, module and state, and does not move.
+- Chassis swatches (`#1E293B`, `#059669`, `#0284C7`, `#D97706`, `#0F172A`) are slate-800, emerald-600,
+  sky-600, amber-600 and slate-900. They are material paint on the model, not UI signals, and each is
+  named in text beside its radio.
+- The 409 colour on the model is `#e11d48` (rose-600); "crimson" from the brief would be the red family,
+  which stays banned.
 
 ---
 

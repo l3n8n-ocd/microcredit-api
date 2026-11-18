@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: '/playground', label: 'Playground' },
   { href: '/agent', label: 'Agent' },
   { href: '/motion-lab', label: 'Motion Lab' },
+  { href: '/3d-lab', label: '3D Lab' },
 ] as const
 
 /**
@@ -27,7 +28,7 @@ export function Navbar() {
     <header className="border-b border-slate-200 bg-canvas">
       <nav
         aria-label="Primary"
-        className="mx-auto flex h-12 max-w-5xl items-center gap-4 overflow-x-auto px-4 whitespace-nowrap"
+        className="mx-auto flex h-12 max-w-6xl items-center gap-4 overflow-x-auto px-4 whitespace-nowrap"
       >
         <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold" aria-label="MicroCredit API home">
           <img src="/favicon.svg" width={24} height={24} alt="" aria-hidden="true" />

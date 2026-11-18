@@ -34,6 +34,7 @@ act on.
 | Build      | Vite 8                                             |
 | Styling    | Tailwind CSS 4 (via `@tailwindcss/vite`)           |
 | Lint       | oxlint: no `any`, no default exports, hooks rules  |
+| 3D         | `three` 0.187 on `/3d-lab` only, lazy-loaded (`next/dynamic`, `ssr: false`) |
 | Tests      | Vitest 5 + jsdom + Testing Library                 |
 | Git hooks  | husky + lint-staged + commitlint (Conventional Commits) |
 | CI         | GitHub Actions: typecheck → lint → test → build    |
@@ -151,12 +152,12 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (497 tests)                |
+| `npm test`          | Run the Vitest suite once (516 tests)                |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
 | `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 32 browser checks and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e:fe07` | After `build`: FE-07 tool cards, 14 browser checks and the 6 tool-state screenshots |
-| `npm run test:e2e`  | After `build`: Playwright (`e2e/*.spec.ts`): the primary flow (Disburse replay, then the copilot with a tool card, mocked `/api/chat`) and the FE-AA1 `/motion-lab` checks |
+| `npm run test:e2e`  | After `build`: Playwright (`e2e/*.spec.ts`): the primary flow (Disburse replay, then the copilot with a tool card, mocked `/api/chat`), the FE-AA1 `/motion-lab` checks and the FE-AA2 `/3d-lab` checks |
 | `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes at 375px/1280px with no overflow, and the AI Copilot streaming checks |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -195,6 +196,37 @@ or chip) reaches `output-error` on demand.
 
 **Error codes:** `ERR_TOOL_SCHEMA_BOUNDS`, `ERR_LEDGER_LOAN_NOT_FOUND`, `ERR_ILLEGAL_TRANSITION`,
 `ERR_STALE_IF_MATCH`, `ERR_TOOL_EXECUTION`. Each one's retry fix is listed in the doc.
+
+## 🧊 FE-AA2: 3D WebGL POS Configurator & FE-10 Performance Note
+
+[`/3d-lab`](https://microcredit-api-beta.vercel.app/3d-lab) shows a MicroCredit POS terminal in WebGL, built from
+primitives in the browser. Press **Simulate 201 Disbursed** or **Simulate 409 Conflict** and it acts out the two
+outcomes the Disburse sandbox returns:
+- **201:** the security ring spins emerald and a `201 · ₱5,000.00` badge rises.
+- **409:** the ring pulses rose and a vault shutter drops over `If-Match "3" is stale`.
+
+What else you can do there:
+- **Configure it:** repaint the chassis, set metalness and roughness, turn on wireframe, swap the NFC ring for a
+  receipt printer, change the lighting, set auto-rotate.
+- **Load your own model:** drop a `.glb` on it, or press **Generate & load sample .glb** to round-trip the terminal
+  through `GLTFExporter` and `GLTFLoader`.
+
+The same terminal sits at the bottom of `/` as a still blueprint until you press **Load the 3D inspector**.
+Write-up: [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md).
+
+**FE-10 Performance Lens note.** Measured on `next start` with headless Chromium; details and TODOs in the doc.
+
+| Lens | Result |
+| --- | --- |
+| Bundle isolation | `three` lives in one lazy chunk behind `next/dynamic(..., { ssr: false })`. `/` and `/underwriting` load 0 scripts containing Three.js (checked in [`e2e/three-d-lab.spec.ts`](./e2e/three-d-lab.spec.ts)). `/` fetches it only after a click. |
+| Chunk size | 1 file: 180.4 KB compressed (gzip), 715.4 KB of JavaScript. It is requested after the page's `load` event. |
+| Network for the model | 0 requests: no model, texture or HDR file. The 245 KB Draco decoder is fetched only for a Draco-compressed drop. |
+| First frame | 244–319 ms after the canvas mounts (5 cold loads, localhost). |
+| Scene cost | 13 draw calls, 7,632 triangles, 0.23–0.42 ms of render CPU per frame. |
+| Phones | DPR clamped to `[1, 1.5]`: a 3x screen renders at 1.5x (browser-checked). `touch-action: none` for one-finger orbit and pinch zoom. 0 px horizontal overflow at 375 px. The loop stops off-screen and in hidden tabs. |
+| Disposal | One cleanup frees geometries, materials, textures, the environment map, the Draco worker and the context. The browser check confirms `isContextLost()` after unmount. |
+| Reduced motion / low power / no WebGL | An isometric SVG blueprint that follows the same controls; WebGL is never created. |
+| Frame rate | **TODO:** headless SwiftShader shows 38–45 FPS, which says nothing about real GPUs. Real-device readings from the HUD go in the doc. |
 
 ## 🎓 FlyRank Internship Deliverables
 
@@ -437,6 +469,19 @@ or chip) reaches `output-error` on demand.
     shift, scale and shake. The 100 ms press token also runs on the real Disburse, chat Send and
     "Approve & Execute Payout" buttons.
   - `npm test` 497/497 (24 new); `npm run test:e2e` adds 5 browser checks ([`e2e/motion-lab.spec.ts`](./e2e/motion-lab.spec.ts)).
+- **FE-AA2 · Your First 3D Experience on the Web:** [`/3d-lab`](https://microcredit-api-beta.vercel.app/3d-lab) · [`src/features/three-d/Vault3DCanvas.tsx`](./src/features/three-d/Vault3DCanvas.tsx) · [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md)
+  - **A WebGL POS terminal that acts out `201` and `409`.** It is built from primitives (0 model downloads).
+  - **Controls:** a keyboard-first configurator for paint, finish, wireframe, module, lighting and auto-rotate.
+  - **Your own model:** `.glb` / `.gltf` drag-and-drop with `Box3` auto-fit, and a 1-click sample `.glb`
+    round trip through `GLTFExporter` and `GLTFLoader`.
+  - **Loads responsibly:**
+    - `three` is one 180.4 KB (gzip) lazy chunk; 0 KB of it on `/` and `/underwriting`.
+    - DPR is clamped to 1.5.
+    - Everything is disposed on unmount, down to the WebGL context.
+    - Reduced motion or low power gets an SVG blueprint and no WebGL.
+  - **FE-10 HUD:** live FPS, frame time, draw calls, triangles, DPR, first frame and lazy chunk size.
+    Real-device FPS is a TODO.
+  - `npm test` 516/516 (19 new); `npm run test:e2e` adds 6 browser checks ([`e2e/three-d-lab.spec.ts`](./e2e/three-d-lab.spec.ts)).
 
 ## License
 

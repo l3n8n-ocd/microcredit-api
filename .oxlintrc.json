@@ -88,6 +88,7 @@
   "ignorePatterns": [
     "dist",
     "node_modules",
-    ".next"
+    ".next",
+    "public/draco/**"
   ]
 }

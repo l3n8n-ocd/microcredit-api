@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { App } from '../App.tsx'
+import { Vault3DInspectorCard } from '../features/three-d/Vault3DInspectorCard.tsx'
 
 /**
  * `/` — Flagship. A Server Component shell that renders the interactive
@@ -34,6 +35,17 @@ export default function HomePage() {
           </Link>
         </div>
       </aside>
+      {/* FE-AA2: below the fold with the copilot card. Three.js loads only if "Load the 3D inspector" is pressed. */}
+      <section aria-labelledby="vault-3d-heading" className="bg-canvas px-4 pb-10 sm:px-8">
+        <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-5">
+          <h2 id="vault-3d-heading" className="text-lg font-semibold text-ink">
+            3D Hardware POS &amp; Ledger Vault Inspector
+          </h2>
+          <div className="mt-3">
+            <Vault3DInspectorCard />
+          </div>
+        </div>
+      </section>
     </>
   )
 }
