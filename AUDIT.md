@@ -74,14 +74,20 @@ How to read these numbers:
 - ² **`/underwriting`'s trace includes the tool-card chunk.** It is fetched when the browser is idle after
   load (§6), so it sits inside Lighthouse's trace window but not before `load`.
 
-### Live Vercel (before, 3 runs per route)
+### Live Vercel (same Lighthouse settings, run from the build container)
 
-| Route | Performance | LCP |
+| Route | Before (`e1ab531`, 3 runs) | After (`dde0f89`, 7 runs) |
 | --- | --- | --- |
-| `/` | 95–99 | 0.9–1.0 s |
-| `/underwriting` | 96–99 | 0.9–2.4 s (one late run) |
+| `/` performance | 99 [95–99] | 99 [98–100] |
+| `/` LCP | 0.93 s [0.91–0.96] | 0.94 s [0.91–0.98] |
+| `/underwriting` performance | 96 [96–99] | **99 [96–100]** |
+| `/underwriting` LCP | 0.98 s **[0.93–2.42]** | **0.93 s [0.91–0.96]** |
+| `/underwriting` TBT | 158 ms [134–221] | 114 ms [76–237] |
+| CLS (worst run, both routes) | 0 | 0 |
 
-Accessibility, Best Practices and SEO were 100 on every run. Live "after" numbers are measured after deploy.
+- Accessibility, Best Practices and SEO were 100 on every live run, before and after.
+- Vercel now serves `/underwriting` as a prerendered page (`x-vercel-cache: PRERENDER`).
+- The live "before" set is only 3 runs, so its range is less certain than the local 7-run comparison above.
 
 ---
 
