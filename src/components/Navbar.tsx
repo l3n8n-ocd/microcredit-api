@@ -30,7 +30,7 @@ export function Navbar() {
         aria-label="Primary"
         className="mx-auto flex h-12 max-w-6xl items-center gap-4 overflow-x-auto px-4 whitespace-nowrap"
       >
-        <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold" aria-label="MicroCredit API home">
+        <Link href="/" className="flex shrink-0 items-center gap-2 rounded-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" aria-label="MicroCredit API home">
           <img src="/favicon.svg" width={24} height={24} alt="" aria-hidden="true" />
           <span className="text-sm">MicroCredit API</span>
         </Link>
@@ -39,7 +39,7 @@ export function Navbar() {
           <li>
             <Link
               href="/underwriting#copilot"
-              className="flex items-center gap-1.5 rounded-full border border-main px-2.5 py-0.5 font-semibold text-ink transition-colors hover:bg-slate-100"
+              className="flex items-center gap-1.5 rounded-full border border-main px-2.5 py-0.5 font-semibold text-ink transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
               AI Copilot
@@ -52,10 +52,10 @@ export function Navbar() {
                 <Link
                   href={link.href}
                   aria-current={active ? 'page' : undefined}
-                  className={`block border-b-2 px-2 py-1 transition-colors ${
+                  className={`block border-b-2 px-2 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                     active
                       ? 'border-accent font-semibold text-ink'
-                      : 'border-transparent text-slate-500 hover:text-ink'
+                      : 'border-transparent text-slate-600 hover:text-ink'
                   }`}
                 >
                   {link.label}

@@ -17,7 +17,7 @@ const REPO = 'https://github.com/l3n8n-ocd/microcredit-api/blob/main'
  */
 export default function AgentPage() {
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-3xl font-bold tracking-tight">SentinelScout</h1>
       <p className="mt-2 max-w-3xl text-slate-700">
         A triage agent with one job: given a GitHub Security Advisory, decide whether this repo is exposed, check that the{' '}

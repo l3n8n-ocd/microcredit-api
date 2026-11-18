@@ -80,13 +80,13 @@ lint-staged + commitlint (git hooks), GitHub Actions (CI). Capstone spec: [`SPEC
 | `npm run dev`       | Start the Next.js dev server (App Router)                  |
 | `npm run typecheck` | Strict-mode type check (`tsc --noEmit`)                    |
 | `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports except Next route files)|
-| `npm test`          | Run Vitest once (516 tests in `src/`, `playground/`, `agents/`) |
+| `npm test`          | Run Vitest once (524 tests in `src/`, `playground/`, `agents/`) |
 | `npm run build`     | Production build (`next build`)                            |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
-| `npm run test:e2e:fe08` | FE-08: after `build`, the sabotage drill (32 browser checks) and the 4 Checkpoint 1 screenshots |
+| `npm run test:e2e:fe08` | FE-08: after `build`, the sabotage drill (31 browser checks) and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e:fe07` | FE-07: after `build`, the tool cards (14 browser checks) and the 6 tool-state screenshots |
-| `npm run test:e2e`  | After `build`: Playwright `e2e/*.spec.ts`, the primary flow, `/motion-lab` and `/3d-lab` (`playwright test`, `next start`, mocked `/api/chat`) |
+| `npm run test:e2e`  | After `build`: Playwright `e2e/*.spec.ts`: the primary flow, `/motion-lab`, `/3d-lab`, and the FE-10 keyboard-only flow + axe-core scan of 5 routes (`playwright test`, `next start`) |
 | `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes responsive at 375px/1280px, the AI Copilot streaming / Stop / scroll checks, and keyboard-only checks on `/playground` |
 
 **Before saying any change is done, run `typecheck`, `lint`, and `test`, and

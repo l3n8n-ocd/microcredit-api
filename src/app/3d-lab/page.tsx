@@ -13,7 +13,7 @@ const REPO = 'https://github.com/l3n8n-ocd/microcredit-api/blob/main'
  */
 export default function ThreeDLabPage() {
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-6xl px-4 py-8">
       <h1 className="text-3xl font-bold tracking-tight">3D Lab: POS &amp; Ledger Vault Inspector</h1>
       <p className="mt-2 max-w-3xl text-slate-700">
         A MicroCredit point-of-sale terminal in WebGL. Press <strong>Simulate 201 Disbursed</strong> or{' '}

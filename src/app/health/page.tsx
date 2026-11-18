@@ -36,7 +36,7 @@ export default async function HealthPage() {
 
   if (!result.ok) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-4xl px-4 py-8">
         <h1 className="text-3xl font-bold tracking-tight">System health</h1>
         <p role="alert" className="mt-4 rounded-md border border-rose-300 bg-rose-50 p-3 text-rose-800">
           Could not reach <code className="font-mono">/api/health</code>: {result.message}
@@ -54,7 +54,7 @@ export default async function HealthPage() {
   ]
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-3xl font-bold tracking-tight">System health</h1>
       <p className="mt-2 text-slate-600">
         This Server Component fetches <code className="font-mono">/api/health</code> on every request and

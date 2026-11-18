@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { PENDING_IDEMPOTENCY_KEY, useIdempotencyKey } from '../../hooks/useIdempotencyKey.ts'
+import { IdempotencyKeyText } from '../../components/ui/IdempotencyKeyText.tsx'
 import { createIdempotencyKey, formatPHP, parsePesosToCentavos } from '../../utils/index.ts'
 import { formatIfMatch, type DisbursementServer } from './disbursementServer.ts'
 import { buildDisbursementJournal, journalTotals } from './ledger.ts'
@@ -342,7 +343,9 @@ export function DisbursementForm({
           </h3>
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono text-xs text-slate-300">
             <dt>Idempotency-Key</dt>
-            <dd className="break-all text-slate-100">{idempotencyKey}</dd>
+            <dd className="break-all text-slate-100">
+              <IdempotencyKeyText value={idempotencyKey} />
+            </dd>
             <dt>If-Match</dt>
             <dd className="text-slate-100">{selectedLoan === null ? '—' : formatIfMatch(selectedLoan.version)}</dd>
           </dl>

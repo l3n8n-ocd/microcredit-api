@@ -267,8 +267,8 @@ async function compareSkeleton(fromPath, linkName, skeletonSelector, realSelecto
   await nav.close()
   return { skeletonHeight, realHeight }
 }
-const cards = await compareSkeleton('/', 'Underwriting', '[data-skeleton="score-card"]', 'main dl > div')
-check(cards.skeletonHeight !== null && Math.abs(cards.skeletonHeight - cards.realHeight) <= 1, `score-card skeleton ${cards.skeletonHeight}px vs real stat card ${cards.realHeight}px`)
+// FE-10 removed underwriting/loading.tsx: /underwriting is static and prefetched now, and its Suspense
+// boundary delayed the LCP paint on throttled phones (AUDIT.md §1). Only /health still has a route skeleton.
 const rows = await compareSkeleton('/', 'Health', '[data-skeleton="ledger-row"]', 'main table tbody tr')
 check(rows.skeletonHeight !== null && Math.abs(rows.skeletonHeight - rows.realHeight) <= 1, `ledger-row skeleton ${rows.skeletonHeight}px vs real health row ${rows.realHeight}px`)
 

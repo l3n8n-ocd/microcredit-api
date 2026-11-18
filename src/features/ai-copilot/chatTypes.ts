@@ -113,6 +113,29 @@ export function messageText(message: ChatMessage): string {
   return message.parts.map((part) => (part.type === 'text' ? part.text : '')).join('')
 }
 
+/** Longest settled-reply summary the status line reads out, in characters. */
+export const SUMMARY_MAX_CHARS = 160
+
+/**
+ * FE-10: what the polite status line says once a reply settles. The transcript itself is
+ * `aria-live="off"` (45 token mutations a second would flood a screen reader), so this is the one
+ * place the reply is spoken: its first sentence, Markdown symbols dropped, capped at 160 characters.
+ * A reply that is only tool cards says so instead.
+ */
+export function settledSummary(message: ChatMessage): string {
+  const plain = messageText(message)
+    .replace(/```[\s\S]*?(```|$)/g, ' (code) ')
+    .replace(/[#*_`>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (plain === '') {
+    const tools = toolPartsOf(message).length
+    return tools === 0 ? '' : `${tools} tool result${tools === 1 ? '' : 's'} below.`
+  }
+  const sentence = /^.*?[.!?](\s|$)/.exec(plain)?.[0]?.trim() ?? plain
+  return sentence.length <= SUMMARY_MAX_CHARS ? sentence : `${sentence.slice(0, SUMMARY_MAX_CHARS - 1).trimEnd()}…`
+}
+
 export function toolPartsOf(message: ChatMessage): readonly ToolPart[] {
   return message.parts.filter((part): part is ToolPart => part.type === 'tool')
 }

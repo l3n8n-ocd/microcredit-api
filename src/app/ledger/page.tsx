@@ -18,7 +18,7 @@ export default function LedgerPage() {
   const split = splitRepayment(toCentavos(105_000))
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-3xl font-bold tracking-tight">Double-entry centavo ledger</h1>
       <p className="mt-2 max-w-2xl text-slate-600">
         Every movement is integer centavos (<code className="font-mono">₱1.00 = 100</code>), posts a

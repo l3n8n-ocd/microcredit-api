@@ -1,6 +1,8 @@
 'use client'
 
 import {
+  Suspense,
+  use,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -25,10 +27,22 @@ import {
 import { chatReducer, createInitialState, isBusy, toWireHistory, type ChatFailure } from './chatReducer.ts'
 import { ChatRequestError, fetchChatTransport, type ChatTransport } from './chatTransport.ts'
 import { failureCode, shortPrompt } from './chatFailure.ts'
-import { messageText, toolPartsOf, type ChatFailureKind, type ChatMessage, type StarterPrompt, type ToolDecision } from './chatTypes.ts'
+import { messageText, settledSummary, toolPartsOf, type ChatFailureKind, type ChatMessage, type StarterPrompt, type ToolDecision } from './chatTypes.ts'
 import { clearConversation, loadConversation, saveConversation } from './conversationStore.ts'
 import { StreamingMarkdown } from './StreamingMarkdown.tsx'
-import { ToolInvocationCard } from './ToolInvocationCard.tsx'
+import type { ToolInvocationCardProps } from './ToolInvocationCard.tsx'
+import { cachedToolCard, loadToolCard, preloadToolCard } from './toolCardLoader.ts'
+
+/** FE-10: the tool card from its own chunk. Renders at once if the chunk is in; suspends only while it downloads. */
+function LazyToolCard(props: ToolInvocationCardProps) {
+  const card = cachedToolCard() ?? use(loadToolCard())
+  return <card.ToolInvocationCard {...props} />
+}
+
+/** Held while the card's chunk arrives. No role: the chat keeps exactly one status region. */
+function ToolCardLoading() {
+  return <div className="my-2 min-h-24 rounded-md border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-600">Loading the tool result…</div>
+}
 
 /**
  * AI Underwriting & Ledger Risk Copilot: the streaming chat UI.
@@ -85,6 +99,7 @@ function subscribeToNothing(): () => void {
  * the stored messages. No mismatch warning, and no `setState` inside an effect.
  */
 export function StreamingUnderwritingChat(props: StreamingUnderwritingChatProps) {
+  useEffect(preloadToolCard, [])
   const hydrated = useSyncExternalStore(
     subscribeToNothing,
     () => true,
@@ -145,7 +160,7 @@ function AssistantMessage({ message, tools }: { readonly message: ChatMessage; r
   return (
     <>
       {/* One container for the whole life of the reply: thinking → (skeleton) → first token → full text. */}
-      <div className={slow ? CHAT_TURN_RESERVE : 'min-h-6'} role="group" aria-label="Copilot reply">
+      <div className={slow ? CHAT_TURN_RESERVE : 'min-h-6'} role="group" aria-label="Copilot reply" aria-busy={pending ? 'true' : 'false'}>
         {waiting ? (
           slow ? <SkeletonCard variant="chat-turn" /> : <ThinkingIndicator />
         ) : text === '' && !hasTools ? (
@@ -154,14 +169,15 @@ function AssistantMessage({ message, tools }: { readonly message: ChatMessage; r
           // Text and tool cards in the order they streamed. A stopped or failed reply keeps the tolerant parsing.
           message.parts.map((part, index) =>
             part.type === 'tool' ? (
-              <ToolInvocationCard
-                key={part.toolCallId}
-                part={part}
-                live={pending}
-                onDecision={(decision) => tools.onDecision(message.id, part.toolCallId, decision)}
-                onRetry={tools.onToolRetry}
-                retryDisabled={tools.busy}
-              />
+              <Suspense key={part.toolCallId} fallback={<ToolCardLoading />}>
+                <LazyToolCard
+                  part={part}
+                  live={pending}
+                  onDecision={(decision) => tools.onDecision(message.id, part.toolCallId, decision)}
+                  onRetry={tools.onToolRetry}
+                  retryDisabled={tools.busy}
+                />
+              </Suspense>
             ) : part.text === '' ? null : (
               <StreamingMarkdown key={`text-${index}`} text={part.text} streaming={message.outcome !== 'complete'} />
             ),
@@ -797,6 +813,9 @@ function ChatSession({
     if (!busy) send(draft)
   }
 
+  // FE-10: the last reply, summarised once it settles. The status line is the only live region the chat speaks through.
+  const lastReply = state.messages.findLast((message) => message.role === 'assistant')
+  const summary = lastReply !== undefined && lastReply.outcome === 'complete' ? settledSummary(lastReply) : ''
   const statusText =
     state.status === 'submitted'
       ? 'Copilot is thinking.'
@@ -805,13 +824,23 @@ function ChatSession({
         : state.status === 'stopped'
           ? 'Stopped. The partial reply is kept.'
           : state.status === 'idle' && hasMessages
-            ? 'Reply complete.'
+            ? summary === ''
+              ? 'Reply complete.'
+              : `Reply complete. ${summary}`
             : ''
+
+  /** FE-10: Escape anywhere in the chat stops a reply in flight, like the Stop button (aria-keyshortcuts). */
+  const handleRegionKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    if (event.key !== 'Escape' || !busy) return
+    event.preventDefault()
+    stop()
+  }
 
   return (
     <section
       id="copilot"
       aria-labelledby="copilot-heading"
+      onKeyDown={handleRegionKeyDown}
       className="flex h-[min(44rem,calc(100dvh-4rem))] min-h-96 scroll-mt-4 flex-col overflow-hidden rounded-lg border border-main bg-white"
     >
       <header className="flex items-start justify-between gap-3 border-b border-main bg-main px-3 py-3 text-canvas sm:items-center sm:px-4">
@@ -887,7 +916,7 @@ function ChatSession({
         )}
       </div>
 
-      <p role="status" className="sr-only">
+      <p role="status" aria-live="polite" aria-atomic="false" className="sr-only">
         {statusText}
       </p>
 
@@ -930,6 +959,8 @@ function ChatSession({
             type="submit"
             disabled={!busy && !canSend}
             data-state={busy ? 'stop' : 'send'}
+            // FE-10: while a reply is in flight this is Stop. It stays right after the textarea in the Tab order.
+            {...(busy ? { 'aria-label': 'Stop generating AI response', 'aria-keyshortcuts': 'Escape' } : {})}
             className={`smart-press min-h-11 w-20 shrink-0 rounded-md border border-main px-3 text-sm font-semibold motion-reduce:transition-none ${
               busy
                 ? 'bg-white text-ink hover:bg-slate-100'

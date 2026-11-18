@@ -40,8 +40,27 @@ export default function RootLayout({ children }: { readonly children: ReactNode 
   return (
     <html lang="en" className={`${plusJakarta.variable} ${jetbrains.variable}`}>
       <body className="min-h-dvh bg-canvas font-sans text-ink antialiased">
+        {/* FE-10: the first Tab stop, parked above the viewport until focused. Every route's <main> is id="main-content" tabIndex={-1}, so focus lands inside it. */}
+        <a
+          href="#main-content"
+          className="fixed top-2 left-2 z-50 -translate-y-24 rounded-md bg-main px-4 py-3 text-sm font-semibold text-white focus:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Skip to main content
+        </a>
         <Navbar />
         {children}
+        <footer className="border-t border-slate-200 bg-canvas px-4 py-6 text-sm text-slate-700">
+          <p className="mx-auto max-w-5xl">
+            MicroCredit API ·{' '}
+            <a className="font-semibold text-ink underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" href="https://github.com/l3n8n-ocd/microcredit-api">
+              Source on GitHub
+            </a>{' '}
+            ·{' '}
+            <a className="font-semibold text-ink underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" href="https://github.com/l3n8n-ocd/microcredit-api/blob/main/AUDIT.md">
+              Accessibility &amp; performance audit
+            </a>
+          </p>
+        </footer>
       </body>
     </html>
   )

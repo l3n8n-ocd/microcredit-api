@@ -24,7 +24,7 @@ export default function AdvisoriesPage() {
   ]
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-3xl font-bold tracking-tight">Security &amp; concurrency guardrails</h1>
       <p className="mt-2 max-w-2xl text-slate-600">
         The checks that keep a double-click, a network retry, or two admins from paying a borrower

@@ -9,7 +9,7 @@
  * 5. output-error: the sanitized retry, and the chat wiring around all of it.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   evaluateBorrowerTrustScore,
   ledgerInputSchema,
@@ -29,6 +29,7 @@ import { loadConversation, saveConversation } from '../conversationStore.ts'
 import { StreamingUnderwritingChat } from '../StreamingUnderwritingChat.tsx'
 import { partialArguments } from '../toolArgs.ts'
 import { ToolInvocationCard } from '../ToolInvocationCard.tsx'
+import { loadToolCard } from '../toolCardLoader.ts'
 
 const TRUST_INPUT = {
   borrowerName: "Nena's Sari-Sari Store",
@@ -73,6 +74,9 @@ function renderCard(tool: ToolPart, options: { live?: boolean; retryDisabled?: b
   )
   return { onDecision, onRetry, view, card: screen.getByRole('region', { name: /^Tool call / }) }
 }
+
+// FE-10: the card is its own chunk. In the browser it is preloaded when idle; here, before the first render.
+beforeAll(() => loadToolCard())
 
 beforeEach(() => {
   resetCopilotServer(0)

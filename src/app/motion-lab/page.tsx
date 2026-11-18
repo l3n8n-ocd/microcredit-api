@@ -41,7 +41,7 @@ const RATIONALE: readonly { state: string; token: string; why: string }[] = [
  */
 export default function MotionLabPage() {
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-3xl font-bold tracking-tight">Motion Lab</h1>
       <p className="mt-2 max-w-3xl text-slate-700">
         One button, six states: <code className="font-mono">idle</code>, hover / focus, press,{' '}

@@ -152,12 +152,12 @@ npm run dev
 | `npm run start`     | Serve the production build locally (`next start`)    |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode           |
 | `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (516 tests)                |
+| `npm test`          | Run the Vitest suite once (524 tests)                |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
-| `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 32 browser checks and the 4 Checkpoint 1 screenshots |
+| `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 31 browser checks and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e:fe07` | After `build`: FE-07 tool cards, 14 browser checks and the 6 tool-state screenshots |
-| `npm run test:e2e`  | After `build`: Playwright (`e2e/*.spec.ts`): the primary flow (Disburse replay, then the copilot with a tool card, mocked `/api/chat`), the FE-AA1 `/motion-lab` checks and the FE-AA2 `/3d-lab` checks |
+| `npm run test:e2e`  | After `build`: Playwright (`e2e/*.spec.ts`): the primary flow (Disburse replay, then the copilot with a tool card, mocked `/api/chat`), the FE-AA1 `/motion-lab` checks, the FE-AA2 `/3d-lab` checks and the FE-10 keyboard-only flow + axe-core scan |
 | `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes at 375px/1280px with no overflow, and the AI Copilot streaming checks |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow
@@ -482,6 +482,28 @@ Write-up: [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md).
   - **FE-10 HUD:** live FPS, frame time, draw calls, triangles, DPR, first frame and lazy chunk size.
     Real-device FPS is a TODO.
   - `npm test` 516/516 (19 new); `npm run test:e2e` adds 6 browser checks ([`e2e/three-d-lab.spec.ts`](./e2e/three-d-lab.spec.ts)).
+- **FE-10 · Accessibility and Performance Audit:** [`AUDIT.md`](./AUDIT.md) · [before](./docs/assets/curated/fe-10-lighthouse-mobile-before.png) / [after](./docs/assets/curated/fe-10-lighthouse-mobile-after.png) Lighthouse mobile · [axe + keyboard evidence](./docs/assets/curated/fe-10-wave-and-keyboard-audit.png) · [`e2e/keyboard-a11y-flow.spec.ts`](./e2e/keyboard-a11y-flow.spec.ts)
+  - **Measured, 7 Lighthouse mobile runs per route per build:**
+    - accessibility, best practices and SEO were 100 before and after;
+    - `/underwriting` performance median 97 → 99;
+    - its LCP no longer lands at ~3.2 s in 3 of 7 runs (now 0.76 s in 7 of 7);
+    - CLS on `/` 0.010 → 0.
+  - **Root causes found and fixed:**
+    - a `force-dynamic` page whose `loading.tsx` skeleton swapped in late (now static);
+    - a 7-character `Idempotency-Key` placeholder that wrapped differently from the UUID replacing it;
+    - Zod and the tool card in `/underwriting`'s first load (now a preloaded chunk: −130 KB of JavaScript
+      before `load`).
+  - **AI chat:**
+    - one polite `role="status"` line reads milestones and a one-sentence summary of the settled reply;
+      the transcript stays `aria-live="off"`, so tokens are never read out one by one;
+    - Stop is the next Tab stop after the prompt, named "Stop generating AI response", with
+      `aria-keyshortcuts="Escape"`; Escape stops and returns focus to the prompt.
+  - **Pages:** a skip link, `main#main-content` and a footer landmark on every route. Muted text went
+    from 4.55:1 to 7:1+, and 0 axe-core violations on 5 routes.
+  - **Not claimed:** WAVE was not run (axe-core instead), and INP was not measured; both are TODOs in
+    `AUDIT.md`.
+  - `npm test` 524/524 (8 new); `npm run test:e2e` adds the keyboard-only flow and 5 axe scans
+    (18/18).
 
 ## License
 

@@ -90,7 +90,7 @@ its real box come from the same strings, not from two copies tuned by eye:
 | Variant | Stands in for | Shared constant | Measured (e2e, client navigation with the RSC payload held back) |
 | --- | --- | --- | --- |
 | `chat-turn` | a reply with no token after 1.5 s | `CHAT_TURN_RESERVE` (`min-h-24`) | layout shift within 250 ms of the first token: **0** |
-| `score-card` | the 4 stat cards on `/underwriting` (`underwriting/loading.tsx`) | `STAT_CARD_CLASS` | skeleton **82 px**, real card **82 px** |
+| `score-card` | the 4 stat cards on `/underwriting` (`underwriting/loading.tsx`, **removed in FE-10**: its streamed boundary delayed LCP; see [`AUDIT.md`](../AUDIT.md) §1) | `STAT_CARD_CLASS` | skeleton **82 px**, real card **82 px** (measured in FE-08) |
 | `ledger-row` | the invariant rows on `/health` (`health/loading.tsx`) | `LEDGER_ROW_CLASS`, `LEDGER_CELL_CLASS` | skeleton **29 px**, real row **29 px** |
 
 `/ledger` has no loading state on purpose: it is prerendered static, so a skeleton there would never show.

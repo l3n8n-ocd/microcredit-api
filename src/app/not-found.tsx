@@ -5,7 +5,7 @@ export default function NotFound() {
   const link =
     'inline-flex min-h-11 items-center rounded-md border border-main px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-2xl px-4 py-10">
       <section aria-labelledby="not-found-title" className="rounded-lg border border-main bg-white p-5 text-ink">
         <p className="font-mono text-xs text-slate-600">
           <span aria-hidden="true" className="mr-1.5 inline-block size-2 rounded-full bg-main align-middle" />

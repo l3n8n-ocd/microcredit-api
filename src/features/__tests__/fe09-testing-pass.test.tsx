@@ -13,7 +13,7 @@
  *     controls frame by frame. Any other request throws, so nothing leaves the runner.
  */
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { evaluateBorrowerTrustScore, proposeDisbursementExecution, verifyLedgerAndIdempotency } from '../../lib/ai/tools.ts'
 import type { ChatStreamEvent } from '../ai-copilot/chatProtocol.ts'
 import type { StarterPrompt, ToolDecision, ToolPart, ToolState } from '../ai-copilot/chatTypes.ts'
@@ -24,6 +24,7 @@ import { DisbursementForm } from '../disbursement/DisbursementForm.tsx'
 import { createDisbursementServer, type DisbursementServer } from '../disbursement/disbursementServer.ts'
 import { accountBalance, journalTotals } from '../disbursement/ledger.ts'
 import { SEED_LOANS } from '../disbursement/seedLoans.ts'
+import { loadToolCard } from '../ai-copilot/toolCardLoader.ts'
 
 // ── The mocked /api/chat ────────────────────────────────────────────────────
 
@@ -139,6 +140,9 @@ const TRUST_INPUT = {
 
 let route: ChatRoute
 
+// FE-10: the card is its own chunk. In the browser it is preloaded when idle; here, before the first render.
+beforeAll(() => loadToolCard())
+
 beforeEach(() => {
   window.localStorage.clear()
   route = mockChatRoute()
@@ -164,7 +168,7 @@ describe('FE-09 · chat streaming lifecycle (mocked /api/chat)', () => {
     expect(screen.getByRole('status').textContent).toBe('Copilot is thinking.')
     expect(within(reply()).getByText('Thinking…')).toBeDefined()
     expect(log().getAttribute('aria-busy')).toBe('true')
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Stop generating AI response' })).toBeDefined()
     // The request carried the prompt as the last user turn.
     expect(stream.body().messages).toEqual([{ role: 'user', content: PROMPT }])
   })
@@ -206,7 +210,7 @@ describe('FE-09 · chat streaming lifecycle (mocked /api/chat)', () => {
     const card = within(reply()).getByRole('region', { name: 'Tool call evaluateBorrowerTrustScore: output-available' })
     expect(within(card).getByRole('img', { name: 'Trust score breakdown, 3 pillars' })).toBeDefined()
     expect(within(reply()).getByRole('strong').textContent).toBe('798')
-    expect(screen.getByRole('status').textContent).toBe('Reply complete.')
+    expect(screen.getByRole('status').textContent).toMatch(/^Reply complete\./)
     expect(screen.getByRole('button', { name: 'Send' })).toBeDefined()
   })
 

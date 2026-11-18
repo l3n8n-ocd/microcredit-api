@@ -51,7 +51,7 @@ function renderChat() {
 
 const input = (): HTMLTextAreaElement => screen.getByLabelText<HTMLTextAreaElement>('Ask the copilot')
 const sendButton = (): HTMLButtonElement => screen.getByRole<HTMLButtonElement>('button', { name: 'Send' })
-const stopButton = (): HTMLButtonElement => screen.getByRole<HTMLButtonElement>('button', { name: 'Stop' })
+const stopButton = (): HTMLButtonElement => screen.getByRole<HTMLButtonElement>('button', { name: 'Stop generating AI response' })
 const log = (): HTMLElement => screen.getByRole('log', { name: 'Conversation' })
 /** The newest assistant reply: the group named "Copilot reply". */
 const lastAssistantBody = (): HTMLElement => {
@@ -134,8 +134,8 @@ describe('StreamingUnderwritingChat', () => {
     emit(call, DONE)
     expect(lastAssistantBody()).toBe(body)
     expect(log().getAttribute('aria-busy')).toBe('false')
-    expect(screen.getByRole('status').textContent).toBe('Reply complete.')
-    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+    expect(screen.getByRole('status').textContent).toMatch(/^Reply complete\./)
+    expect(screen.queryByRole('button', { name: 'Stop generating AI response' })).toBeNull()
     expect(within(log()).getByText(/local rule engine/)).toBeDefined()
   })
 
@@ -158,7 +158,7 @@ describe('StreamingUnderwritingChat', () => {
     // The composer is live again in the same render: input enabled and focused, Send back.
     expect(input().disabled).toBe(false)
     expect(document.activeElement).toBe(input())
-    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Stop generating AI response' })).toBeNull()
 
     // A token from the aborted request that lands late is dropped.
     emit(first, token(' LATE TOKEN'), DONE)

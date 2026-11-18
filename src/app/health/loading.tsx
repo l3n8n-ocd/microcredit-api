@@ -8,7 +8,7 @@ import { SkeletonCard } from '../../components/ui/SkeletonCard.tsx'
  */
 export default function HealthLoading() {
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8" aria-busy="true">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-4xl px-4 py-8" aria-busy="true">
       <p role="status" className="sr-only">
         Checking system health.
       </p>

@@ -50,7 +50,7 @@ export function RouteErrorPanel({ error, retry, boundary, title }: RouteErrorPan
   }, [boundary, type, digest])
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-2xl px-4 py-10">
       <section aria-labelledby="route-error-title" className="rounded-lg border border-main bg-white p-5 text-ink">
         <p className="font-mono text-xs text-slate-600">
           <span aria-hidden="true" className="mr-1.5 inline-block size-2 rounded-full bg-main align-middle" />

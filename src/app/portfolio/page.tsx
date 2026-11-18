@@ -32,7 +32,7 @@ export default function PortfolioPage() {
         </span>
       </header>
 
-      <main className="mx-auto max-w-4xl px-4 pb-20">
+      <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-4xl px-4 pb-20">
         {/* Hero */}
         <section id="hero" className="border-t border-main/15 py-14 sm:py-20">
           <p className="font-mono text-xs font-semibold tracking-widest text-accent uppercase">Lenon D. Adriano</p>

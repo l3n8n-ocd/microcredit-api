@@ -28,7 +28,7 @@ function Variant({ label, source, children }: { readonly label: string; readonly
  */
 export default function PlaygroundPage() {
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-5xl px-4 py-8">
       <h1 className="text-3xl font-bold tracking-tight">Accessible component playground</h1>
       <p className="mt-2 max-w-3xl text-slate-700">
         Three components built from scratch against the W3C ARIA Authoring Practices Guide, each next to the

@@ -7,10 +7,14 @@ import { UnderwritingStandalone } from '../../features/scoring/UnderwritingStand
 import { STARTER_PROMPTS, TOOL_PROMPTS, describeEngine } from '../../lib/ai/underwriting-model.ts'
 
 /**
- * The engine label depends on which API key is set, and Vercel env vars can
- * change between deploys, so the page is rendered per request, not at build time.
+ * Static, with no loading.tsx (FE-10). The engine label depends on which API key is set; a changed
+ * Vercel env var only takes effect in a new deployment, which rebuilds this page, so prerendering
+ * shows the same label a per-request render did.
+ *
+ * Until FE-10 the page was `force-dynamic` with a `loading.tsx` skeleton. Next.js sent the skeleton
+ * first and swapped the real page in from later in the HTML, and on a throttled phone that swap
+ * delayed the LCP paragraph by ~400 ms (Lighthouse LCP ~3.2 s instead of ~0.76 s in 3 of 7 runs).
  */
-export const dynamic = 'force-dynamic'
 
 /**
  * `/underwriting` — Server Component header + metrics, then two client islands:
@@ -26,7 +30,7 @@ export default function UnderwritingPage() {
   const applied = SEED_LOANS.filter((loan) => loan.status === 'APPLIED').length
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8">
+    <main id="main-content" tabIndex={-1} className="focus:outline-none mx-auto max-w-5xl px-4 py-8">
       <h1 className="text-3xl font-bold tracking-tight">Alternative-data underwriting</h1>
       <p className="mt-2 max-w-2xl text-slate-600">
         Score three alt-data signals (utility bills, supplier invoices, GCash/Maya load cadence) to a
@@ -42,7 +46,7 @@ export default function UnderwritingPage() {
           { label: 'Score signals', value: '3' },
         ].map((stat) => (
           <div key={stat.label} className={STAT_CARD_CLASS}>
-            <dt className="text-xs text-slate-500">{stat.label}</dt>
+            <dt className="text-xs text-slate-600">{stat.label}</dt>
             <dd className="mt-1 font-mono text-lg font-semibold">{stat.value}</dd>
           </div>
         ))}
