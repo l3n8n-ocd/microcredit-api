@@ -343,6 +343,7 @@ The Firefox and WebKit matrix runs on demand (`npm run test:e2e:browsers`), not 
 | FE-AA2 · 3D on the web | [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md) | [`/3d-lab`](https://microcredit-api-beta.vercel.app/3d-lab) |
 | FE-AA3 · Signature hero: a fullscreen shader | [`docs/FE-AA3_SIGNATURE_SHADER.md`](./docs/FE-AA3_SIGNATURE_SHADER.md) | [`/shader-hero`](https://microcredit-api-beta.vercel.app/shader-hero) |
 | FE-11 · Production deployment and README | [`docs/FE-11_PRODUCTION_DEPLOY.md`](./docs/FE-11_PRODUCTION_DEPLOY.md) · this README | [app](https://microcredit-api-beta.vercel.app) · [`GET /api/chat`](https://microcredit-api-beta.vercel.app/api/chat) |
+| Ship It · Frontend AI Engineering Capstone | [`docs/SHIP_IT_CAPSTONE.md`](./docs/SHIP_IT_CAPSTONE.md) · [summary image](./docs/assets/curated/ship-it-capstone-summary.png) | [app](https://microcredit-api-beta.vercel.app) · [`/underwriting`](https://microcredit-api-beta.vercel.app/underwriting) |
 | FE-10 · Accessibility and performance audit | [`AUDIT.md`](./AUDIT.md) | |
 | PF-04 · Portfolio live, DNS walkthrough | [`docs/PF-04_DNS_WALKTHROUGH.md`](./docs/PF-04_DNS_WALKTHROUGH.md) | [portfolio](https://l3n8n-ocd.github.io/portfolio/) |
 | Survive the Crit | [portfolio `SURVIVE_THE_CRIT.md`](https://github.com/l3n8n-ocd/portfolio/blob/main/docs/SURVIVE_THE_CRIT.md) | reviewer's words still to paste |
@@ -850,6 +851,16 @@ Write-up: [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md).
     iPhone pass is a TODO in the doc.
   - **README:** screenshots, an environment variables table, key decisions, production limits and "How AI tools
     built this".
+- **Ship It · Frontend AI Engineering Capstone:** [`docs/SHIP_IT_CAPSTONE.md`](./docs/SHIP_IT_CAPSTONE.md) · [summary image](./docs/assets/curated/ship-it-capstone-summary.png) · [live app](https://microcredit-api-beta.vercel.app)
+  - **The 7 sections in one file,** ready to paste: brief, live app, README, tests, audit, deployment and operation,
+    and reflection.
+  - **Re-measured on live `fbc894f` (2026-11-19):**
+    - Lighthouse mobile Performance 99 [98–100] on `/` and `/underwriting`;
+    - Accessibility, Best Practices and SEO 100 in 10 of 10 runs; CLS 0;
+    - axe-core 0 violations on 6 routes;
+    - `npm install && npm run dev` on a fresh clone: exit 0 in 21 s, with no keys.
+  - **Deployment checklist:** 10 items, 2 of them TODO (the provider spend limit and a real iPhone / Safari
+    pass). The sign-off box is left for Lenon to tick.
 
 ## License
 
