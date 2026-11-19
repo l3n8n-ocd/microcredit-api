@@ -11,10 +11,15 @@
  *   - the local rule engine otherwise, streamed one token every ~22 ms.
  * The first frame always names the engine, so the UI can label the reply honestly.
  *
- * Rate limit: requests that would reach a hosted (paid) model pass an in-memory
- * per-client limiter first and get `429` + `Retry-After` when over it. The
- * local engine costs nothing and is not limited. See src/lib/ai/rate-limit.ts
- * for what an in-memory limit does and does not guarantee.
+ * FE-11 production hygiene, in the order a request meets it:
+ *   1. every POST passes a per-client limit (default 20 per 60 s, `CHAT_RATE_LIMIT_MAX` /
+ *      `CHAT_RATE_LIMIT_WINDOW_MS`) before its body is read: `429` + `Retry-After`;
+ *   2. the body is read with a 32 KB cap (`413`) and must be JSON (`400`);
+ *   3. at most 24 messages, 2,000 characters per user turn and 4,000 per echoed assistant turn (`400`);
+ *   4. requests that would reach a hosted (paid) model pass a second, stricter limiter (10 a minute,
+ *      100 a day): `429` + `Retry-After`.
+ * Every refusal is `{ error, code }` JSON with a fixed message: no exception text, no stack.
+ * See src/lib/ai/rate-limit.ts for what an in-memory limit does and does not guarantee.
  *
  * Cancellation, two ways. (1) Explicit: Stop sends `DELETE /api/chat?requestId=…`
  * and the handler below aborts that request's controller. (2) Implicit: when
@@ -31,6 +36,7 @@
  */
 import { APICallError, RetryError, stepCountIs, streamText } from 'ai'
 import {
+  CHAT_LIMITS,
   encodeSseFrame,
   isRequestId,
   isSabotageMode,
@@ -46,7 +52,8 @@ import { planLocalTool, streamLocalToolCall, type ToolTiming } from '../../../li
 import { isToolName, TOOL_META, toolErrorCode, toolErrorText } from '../../../lib/ai/tools.ts'
 import { chatStats, type ModelOutcome } from '../../../lib/ai/chat-stats.ts'
 import { streamLocalReply } from '../../../lib/ai/local-engine.ts'
-import { CHAT_RATE_LIMIT, chatRateLimiter, clientKey, describeWait } from '../../../lib/ai/rate-limit.ts'
+import { CHAT_RATE_LIMIT, CHAT_REQUEST_LIMIT, chatRateLimiter, chatRequestLimiter, clientKey, describeWait } from '../../../lib/ai/rate-limit.ts'
+import { apiError, readJsonBody } from '../../../lib/http/request-guard.ts'
 import {
   MAX_MODEL_STEPS,
   MODEL_CONFIG,
@@ -59,8 +66,12 @@ import {
 
 /** Node runtime: the AI SDK providers and `crypto.randomUUID` in the local engine both run there. */
 export const runtime = 'nodejs'
-/** Vercel function ceiling in seconds. A reply is capped by `maxOutputTokens` well before this. */
-export const maxDuration = 60
+/**
+ * FE-11: the Vercel function ceiling, in seconds. The hosted-model call gives up at 27 s
+ * (`MODEL_CONFIG.modelTimeout.totalMs`) and the local engine answers in a few seconds, so a reply
+ * ends on its own terms (a `done`, a labelled fallback or an `error` frame) before the host cuts it.
+ */
+export const maxDuration = 30
 
 type Send = (event: ChatStreamEvent) => void
 type HostedEngine = Exclude<ChatEngine, { kind: 'local' }>
@@ -317,6 +328,9 @@ export function GET(): Response {
       // Which commit this deployment was built from (set by the host; public, the repo is public).
       commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       rateLimit: { rules: CHAT_RATE_LIMIT, appliesTo: 'hosted model requests', trackedClients: chatRateLimiter.size() },
+      // FE-11: the limit and caps every POST meets first. Rules only: no client keys.
+      requestLimit: { rule: CHAT_REQUEST_LIMIT, appliesTo: 'every POST', trackedClients: chatRequestLimiter.size() },
+      limits: { ...CHAT_LIMITS, maxDurationSeconds: maxDuration },
       ...chatStats.snapshot(),
     },
     { headers: { 'Cache-Control': 'no-store' } },
@@ -324,15 +338,21 @@ export function GET(): Response {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  // 1. Validate. The body is `unknown` until `parseChatRequest` has checked every field.
-  let body: unknown
-  try {
-    body = await req.json()
-  } catch {
-    return Response.json({ error: 'Request body must be JSON.' }, { status: 400 })
+  // 0. FE-11: the per-client limit comes first, so an over-limit client costs one Map lookup, not a body read.
+  const allowed = chatRequestLimiter.check(clientKey(req.headers))
+  if (!allowed.ok) {
+    chatStats.recordRateLimited()
+    return apiError(429, 'RATE_LIMITED', `Too many requests from this network. Try again in ${describeWait(allowed.retryAfterSeconds)}.`, {
+      retryAfterSeconds: allowed.retryAfterSeconds,
+    })
   }
+
+  // 1. Validate. The body is read with a byte cap, and stays `unknown` until `parseChatRequest` has checked every field.
+  const read = await readJsonBody(req, CHAT_LIMITS.maxBodyBytes)
+  if (!read.ok) return read.response
+  const { body } = read
   const parsed = parseChatRequest(body)
-  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
+  if (!parsed.ok) return apiError(400, 'INVALID_REQUEST', parsed.error)
   const { messages, requestId } = parsed
 
   // FE-08 drills: header first, then `sabotage` in the body. An unknown mode is a 400, not ignored.
@@ -341,7 +361,7 @@ export async function POST(req: Request): Promise<Response> {
     (typeof body === 'object' && body !== null && 'sabotage' in body ? body.sabotage : null)
   if (rawSabotage !== null && rawSabotage !== '') {
     if (!isSabotageMode(rawSabotage)) {
-      return Response.json({ error: `Unknown ${SABOTAGE_HEADER}. Use one of: ${SABOTAGE_MODES.join(', ')}.` }, { status: 400 })
+      return apiError(400, 'UNKNOWN_SABOTAGE_MODE', `Unknown ${SABOTAGE_HEADER}. Use one of: ${SABOTAGE_MODES.join(', ')}.`)
     }
     return sabotageResponse(rawSabotage, messages, req)
   }
@@ -349,7 +369,7 @@ export async function POST(req: Request): Promise<Response> {
   // FE-07 "Retry Tool Call with Sanitized Inputs": run exactly that tool, re-validated, with no model.
   if (parsed.toolCall !== null) {
     const { toolName, input } = parsed.toolCall
-    if (!isToolName(toolName)) return Response.json({ error: `Unknown tool ${toolName}.` }, { status: 400 })
+    if (!isToolName(toolName)) return apiError(400, 'UNKNOWN_TOOL', `Unknown tool ${toolName}.`)
     return directToolResponse({ toolName, input, rationale: 'Retry from the error card, with the inputs it sanitized.' }, req)
   }
 
@@ -362,10 +382,9 @@ export async function POST(req: Request): Promise<Response> {
     const verdict = chatRateLimiter.check(clientKey(req.headers))
     if (!verdict.ok) {
       chatStats.recordRateLimited()
-      return Response.json(
-        { error: `Too many requests from this network. Try again in ${describeWait(verdict.retryAfterSeconds)}.` },
-        { status: 429, headers: { 'Retry-After': String(verdict.retryAfterSeconds) } },
-      )
+      return apiError(429, 'RATE_LIMITED', `Too many requests from this network. Try again in ${describeWait(verdict.retryAfterSeconds)}.`, {
+        retryAfterSeconds: verdict.retryAfterSeconds,
+      })
     }
   }
 

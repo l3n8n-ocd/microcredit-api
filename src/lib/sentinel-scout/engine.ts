@@ -61,6 +61,11 @@ export interface RunOptions {
   readonly emit?: (event: AgentEvent) => void
   /** Present → the model plans. Absent → the FL-06 rules plan. */
   readonly model?: { readonly model: LanguageModel; readonly label: string }
+  /**
+   * How long the model planner may take, in ms. Default 90 s (the CLI). FE-11: `/api/agent` passes a
+   * budget under its 30 s `maxDuration`, so a slow model ends in a `halt` event, not a cut stream.
+   */
+  readonly modelTimeoutMs?: number
 }
 
 export function newTriageId(now: Date, sequence = 1): string {
@@ -355,7 +360,7 @@ async function planWithModel(options: RunOptions, call: Call, emit: (e: AgentEve
       tools,
       stopWhen: stepCountIs(MAX_TOOL_CALLS + 1),
       maxRetries: 0,
-      abortSignal: AbortSignal.timeout(90_000),
+      abortSignal: AbortSignal.timeout(options.modelTimeoutMs ?? 90_000),
     })
     const reply = result.text
     const leaks = findLeaks(reply)

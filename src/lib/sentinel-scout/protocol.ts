@@ -6,6 +6,16 @@ import type { AgentEvent } from './engine.ts'
 
 export const MAX_REQUEST_CHARS = 600
 
+/** FE-11: the budgets `/api/agent` runs under (its `maxDuration` is 30 s). */
+export const AGENT_LIMITS = {
+  /** A request is at most 600 characters, so 4 KB of JSON is generous. */
+  maxBodyBytes: 4 * 1024,
+  /** The model planner's whole budget: 6 s under `maxDuration`, for the halt event and the close. */
+  modelTimeoutMs: 24_000,
+  /** One advisory fetch (GitHub / OSV). On a timeout the tool falls back to its cache or snapshot. */
+  fetchTimeoutMs: 5_000,
+} as const
+
 const EVENT_TYPES = ['start', 'turn', 'tool_call', 'tool_result', 'guardrail', 'final', 'halt'] as const
 
 export function isAgentEvent(value: unknown): value is AgentEvent {

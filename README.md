@@ -37,6 +37,29 @@
 The demo runs against an in-memory mock API in your browser tab, so state resets when you reload (or press **Reset
 demo**).
 
+## Screenshots
+
+**The One Action, before the click.** `/` shows the `Idempotency-Key` and `If-Match: "3"` the payout will send, and
+the journal it will post, balanced before anything moves.
+
+![The Disburse form on /: the request preview shows the Idempotency-Key, If-Match "3", and a balanced debit/credit pair of ₱5,000.00](./docs/assets/curated/real-01-disbursement-sandbox.png)
+
+**After both drills.** The network retry reuses the key and gets `201 Idempotent replay of JE-0001 · no new ledger
+entry`. The second admin's stale `If-Match: "1"` gets `409 Conflict (VERSION_MISMATCH) · no ledger entry`. The ledger
+ends at `Σ debits ₱10,000.00 === Σ credits ₱10,000.00`: two loans, two payouts, not four.
+
+![The request log: 201 Created, then a 201 idempotent replay with no new entry; 201 Created, then 409 Conflict VERSION_MISMATCH; the ledger balanced at ₱10,000.00](./docs/assets/curated/real-02-idempotent-replay-conflict.png)
+
+**A tool card from the copilot.** `evaluateBorrowerTrustScore` in its `output-available` state: 798/1000, three pillar
+bars with their points, and a limit of `₱25,000.00 (2500000 centavos)`. The state inspector replays each of the 4 states.
+
+![A trust score tool card: 798 of 1000, LOW_RISK, three pillar bars, a recommended limit of ₱25,000.00 and a WITHIN_LIMIT check](./docs/assets/curated/fe-07-3-score-chart.png)
+
+**A failure, designed.** A sabotage drill cuts the stream after 14 tokens. The partial reply is kept, the card names
+`ERR_MID_STREAM`, and **Retry** re-sends the exact prompt.
+
+![The copilot after a mid-stream error: the partial reply kept, an error card with code ERR_MID_STREAM, and a Retry button naming the failed prompt](./docs/assets/curated/fe-08-3-mid-stream-error-retry.png)
+
 ## Quick start: from a fresh clone
 
 You need git and **Node.js 22.18 or newer**: SentinelScout imports TypeScript with Node's built-in type stripping, and
@@ -54,7 +77,7 @@ cp .env.example .env.local   # optional: placeholders keep every feature on the 
 ```bash
 npm run typecheck            # tsc --noEmit, strict
 npm run lint                 # oxlint, warnings fail
-npm test                     # Vitest: 533 tests, including the 6 SentinelScout evals
+npm test                     # Vitest: 555 tests, including the 6 SentinelScout evals
 npm run agent:eval           # SentinelScout: the 6 FL-06 eval cases; exits 1 unless 6/6
 npm run agent:run            # SentinelScout: one real triage over MCP stdio
 npm run build                # next build
@@ -79,13 +102,30 @@ npm run test:e2e             # 23 checks: primary flow, keyboard-only flow, axe-
 npm run test:e2e:fold        # 69 checks: above the fold, 375 px / 1280 px on every route, copilot streaming
 ```
 
-**Optional environment variables** (`.env.local`; all server-only, never `NEXT_PUBLIC_`):
+Cross-browser (FE-11, not in CI): Chromium, Firefox, WebKit, and WebKit as an iPhone at 375×812.
 
-| Variable | Turns on |
-| --- | --- |
-| `ANTHROPIC_API_KEY` | The copilot answers with Claude (default `claude-opus-5-5`); `npm run agent:run -- --planner model` plans with it. |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | The same with Gemini (default `gemini-3.5-flash-lite`), if no Anthropic key is set. |
-| `ANTHROPIC_MODEL`, `GOOGLE_GENERATIVE_AI_MODEL` | Override the model IDs. |
+```bash
+npx playwright install --with-deps firefox webkit
+npm run test:e2e:browsers    # 27 checks; BASE_URL=https://microcredit-api-beta.vercel.app runs it against live
+```
+
+### Environment variables
+
+Copy `.env.example` to `.env.local`. **Every variable is optional:** with none set, the copilot answers from the local
+rule engine and SentinelScout uses its rules planner. Secrets are server-only. No secret ever uses the `NEXT_PUBLIC_`
+prefix, because Next.js bundles those values into the JavaScript every visitor downloads.
+
+| Variable | Secret? | Read in | What it does |
+| --- | --- | --- | --- |
+| `ANTHROPIC_API_KEY` | yes | `src/lib/ai/underwriting-model.ts`, `src/lib/sentinel-scout/model.ts` | The copilot answers with Claude (default `claude-opus-5-5`); `npm run agent:run -- --planner model` plans with it. Checked first. |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | yes | the same two files | The same with Gemini (default `gemini-3.5-flash-lite`) when no Anthropic key is set. Production runs on this one. |
+| `ANTHROPIC_MODEL`, `GOOGLE_GENERATIVE_AI_MODEL` | no | the same two files | Override the model IDs. |
+| `CHAT_RATE_LIMIT_MAX` | no | `src/lib/ai/rate-limit.ts` | Requests per client per window on every `POST /api/chat`. Default `20`; 1 to 10,000, anything else falls back to 20. |
+| `CHAT_RATE_LIMIT_WINDOW_MS` | no | `src/lib/ai/rate-limit.ts` | That window. Default `60000`; 1,000 to 86,400,000. |
+| `OPENROUTER_API_KEY` | — | **not read anywhere** | No OpenRouter provider is wired in. Setting it changes nothing. |
+| `WEBHOOK_HMAC_SECRET` | yes | `src/features/health/health.ts` (present or not, never the value) | Placeholder for planned wallet webhooks. Nothing verifies a webhook yet. |
+| `NEXT_PUBLIC_APP_ENV`, `NEXT_PUBLIC_APP_URL` | no, public | `src/features/health/health.ts` | Shown on `/health`. Public by design. |
+| `VERCEL_GIT_COMMIT_SHA` | no | `src/app/api/chat/route.ts` | Set by Vercel. `GET /api/chat` reports it as `commit`, so you can tell which build is live. |
 
 | Script | What it does |
 | --- | --- |
@@ -100,6 +140,7 @@ npm run test:e2e:fold        # 69 checks: above the fold, 375 px / 1280 px on ev
 | `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes at 375px/1280px with no overflow, and the AI Copilot streaming checks |
 | `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 31 browser checks and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e:fe07` | After `build`: FE-07 tool cards, 14 browser checks and the 6 tool-state screenshots |
+| `npm run test:e2e:browsers` | After `build`: FE-11 matrix, 27 checks across Chromium, Firefox, WebKit and WebKit at 375×812 |
 
 Every commit runs lint-staged and a typecheck, and commit messages must follow Conventional Commits (`feat`, `fix`,
 `docs`, `chore`, `refactor`, `test`).
@@ -172,6 +213,33 @@ in-process, with each step streamed to the page.
 Detail: [`docs/FL-07_BUILD_LOG.md`](./docs/FL-07_BUILD_LOG.md) §1 (agent), [`SPEC.md`](./SPEC.md) (routes),
 [`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) (chat).
 
+### Key engineering decisions
+
+| Decision | Why | Where |
+| --- | --- | --- |
+| Money is integer `Centavos` (`₱1.00 = 100`), a branded type, parsed from strings only | `19.99 * 100` is `1998.9999999999998` in JavaScript. `parsePesosToCentavos("19.99")` is exactly `1999`, and an amount past `Number.MAX_SAFE_INTEGER` is refused, not rounded. Pesos appear only in `formatPHP`. | [`src/utils/money.ts`](./src/utils/money.ts) |
+| The `Idempotency-Key` replay is checked **before** the `If-Match` version | A retry of a payout that already landed must get its original receipt (`201` replay), not a false `409`. A second admin with a new key and a stale version gets `409 VERSION_MISMATCH` and no ledger entry. | [`disbursementServer.ts`](./src/features/disbursement/disbursementServer.ts) |
+| Loan states are one discriminated union, moved by a pure `transition()` | 100 `(state, event)` pairs are tested; the 88 illegal ones, such as `REJECTED → DISBURSED`, come back as a typed `409`. | [`loanStateMachine.ts`](./src/features/disbursement/loanStateMachine.ts) |
+| The ledger is append-only double entry | Every entry posts `Σ debits === Σ credits`. A mistake is fixed with a compensating entry, never an edit. | [`ledger.ts`](./src/features/disbursement/ledger.ts) |
+| AI tool calls render in 4 states | `input-streaming → input-available →` then `output-available` or `output-error`. Zod validates the input before `execute` runs, and an error card offers a retry with sanitized inputs. | [`src/lib/ai/tools.ts`](./src/lib/ai/tools.ts), [`ToolInvocationCard.tsx`](./src/features/ai-copilot/ToolInvocationCard.tsx) |
+| The agent proposes; a person decides (FL-01, FL-06, FL-07) | SentinelScout is read-only and makes at most 4 tool calls. Advisory text is wrapped as untrusted data, a secret scan runs before the brief is written, and the brief ends in a sign-off line for a person. | [`src/lib/sentinel-scout/guards.ts`](./src/lib/sentinel-scout/guards.ts) |
+| Public AI routes are capped (FE-11) | `/api/chat` and `/api/agent` have no login, so each request's cost is bounded: see the table below. | [`docs/FE-11_PRODUCTION_DEPLOY.md`](./docs/FE-11_PRODUCTION_DEPLOY.md) |
+
+### Production limits on the AI routes (FE-11)
+
+| | `POST /api/chat` (SSE) | `POST /api/agent` (NDJSON) |
+| --- | --- | --- |
+| `maxDuration` | 30 s | 30 s |
+| Per-client rate limit, checked before the body is read | 20 per 60 s on every request (`CHAT_RATE_LIMIT_*`); then 10 a minute and 100 a day on paid-model requests | 6 a minute, 40 a day |
+| Body | 32 KB, else `413` | 4 KB, else `413` |
+| Content | at most 24 messages; 2,000 characters per user turn, 4,000 per echoed assistant turn; else `400` | `request` at most 600 characters, else `400` |
+| Time budgets inside the 30 s | the model must start within 15 s and finish within 27 s, else a labelled local-engine fallback | model planner 24 s, each advisory fetch 5 s, else a `halt` event |
+| A refusal looks like | `{ "error": "…", "code": "RATE_LIMITED", "retryAfterSeconds": 42 }` plus `Retry-After: 42` | the same shape |
+
+The limiter is in memory, so each Vercel instance counts on its own. It slows a script down; the provider's monthly
+spend limit is the real cap ([`src/lib/ai/rate-limit.ts`](./src/lib/ai/rate-limit.ts)). The client trims old turns to
+fit the 32 KB body, so a long conversation never trips its own `413`.
+
 ## SentinelScout: eval results and honest limitations
 
 **Evals: 6/6.** The six cases were written before the build ([FL-06 §4](./docs/FL-06_PERSONAL_AGENT_SPEC.md)) and run
@@ -204,23 +272,54 @@ against the built agent by `npm run agent:eval`, and in CI via `npm test`. There
 
 Full list: [`docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md`](./docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md) §2.
 
-## Transparency
+## How AI tools built this
 
-> **I built this with Claude Code, and here is what I checked myself.**
->
-> Claude Code wrote most of the code, tests and documentation, in sessions I directed. I set the requirements, chose
-> between the options it laid out, and pushed every commit under my own name.
->
-> **What checks it on every push** ([CI](./.github/workflows/ci.yml)):
-> - `typecheck`, `lint`;
-> - 533 Vitest tests, including the six SentinelScout evals;
-> - `next build`;
-> - 23 Playwright checks, including a keyboard-only run and axe-core on 6 routes;
-> - the 69-check fold script.
->
-> Every number in the docs comes from a run and says how it was measured; where nothing measured it, the docs say TODO.
-> The checks I did by hand are listed in
-> [FL-09 §2.3](./docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md#23-transparency-diligence).
+I built this with Claude Code. Below is the split, with the file that shows each part.
+
+**What Claude Code generated,** in sessions I directed:
+- most of the code: the React components, the route handlers (`src/app/api/chat/route.ts`,
+  `src/app/api/agent/route.ts`), the local rule engine, and SentinelScout's engine and MCP server;
+- most of the tests: the 555 Vitest tests, the Playwright specs and the browser scripts in `e2e/`;
+- the first drafts of the docs, this README included.
+
+**What I set before the code was written,** the rules the AI had to work inside:
+- the One Claim and how it was narrowed: [`docs/WHAT_ARE_YOU_PROVING.md`](./docs/WHAT_ARE_YOU_PROVING.md);
+- the invariants in [`CLAUDE.md`](./CLAUDE.md): integer `Centavos` (§4), `Idempotency-Key` + `If-Match` on every
+  money mutation (§8, §11), strict TypeScript, Conventional Commits and the Voice Card;
+- which work the AI may do alone: FL-01 sorts each target task into collaborate, delegate with review, or fully
+  automate ([`docs/FL-01_WORKFLOW_AUDIT.md`](./docs/FL-01_WORKFLOW_AUDIT.md));
+- SentinelScout's six eval cases, written before the agent existed
+  ([FL-06 §4](./docs/FL-06_PERSONAL_AGENT_SPEC.md)), and its limits: read-only, 4 tool calls, a person signs off.
+
+**Where those rules caught mistakes,** each one on record:
+- **An overflow CI could not see.** In the FE-03/04 drill ([`WORKFLOW.md`](./WORKFLOW.md)), the vague-prompt round
+  shipped `parsePesosToCentavos("90071992547409.93")` returning `9007199254740992`, past `Number.MAX_SAFE_INTEGER`.
+  Typecheck, lint and 5/5 tests were green. `CLAUDE.md` §11 came out of that round.
+- **A shared key factory.** In the same drill, two "admin" screens shared one key factory, so a test got `422`
+  instead of the `409` it targeted. An unused import passed Vitest but failed `tsc`. That is why every commit runs
+  all four checks, not just the tests.
+- **Briefs corrected against the code.** FL-09 asked for "v2 evals"; there is one eval set. FE-AA3 asked for
+  `#060B14`, a hue outside the allowed palette. FE-11's 4,000-character cap would have refused the 12,000-character
+  assistant history the client was sending; now the client trims history to fit.
+- **Mutation checks.** A test that guards an invariant is kept only if it fails when the guard is removed. In FE-11,
+  removing the limiter, the byte cap, the `Content-Length` check or the 30 s ceiling each fails at least one test.
+
+**What I check by hand** is a checklist in [FL-09 §2.3](./docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md#23-transparency-diligence):
+- the double-click on the live demo;
+- the SentinelScout brief read against `package-lock.json`;
+- each diff read before it is pushed under my name;
+- a keyboard pass.
+
+A box is ticked only after I do it, and nothing unticked is claimed here.
+
+**What a machine checks on every push** ([CI](./.github/workflows/ci.yml)):
+- typecheck and lint;
+- 555 Vitest tests, including the six SentinelScout evals;
+- `next build`;
+- 23 Playwright checks, including a keyboard-only run and axe-core on 6 routes;
+- the 69-check fold script.
+
+The Firefox and WebKit matrix runs on demand (`npm run test:e2e:browsers`), not in CI.
 
 ## Master Deliverable Index
 
@@ -243,6 +342,7 @@ Full list: [`docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md`](./docs/FL-09_FL-10_SHO
 | FE-AA1 · Buttons with a brain | [`docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md`](./docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md) | [`/motion-lab`](https://microcredit-api-beta.vercel.app/motion-lab) |
 | FE-AA2 · 3D on the web | [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md) | [`/3d-lab`](https://microcredit-api-beta.vercel.app/3d-lab) |
 | FE-AA3 · Signature hero: a fullscreen shader | [`docs/FE-AA3_SIGNATURE_SHADER.md`](./docs/FE-AA3_SIGNATURE_SHADER.md) | [`/shader-hero`](https://microcredit-api-beta.vercel.app/shader-hero) |
+| FE-11 · Production deployment and README | [`docs/FE-11_PRODUCTION_DEPLOY.md`](./docs/FE-11_PRODUCTION_DEPLOY.md) · this README | [app](https://microcredit-api-beta.vercel.app) · [`GET /api/chat`](https://microcredit-api-beta.vercel.app/api/chat) |
 | FE-10 · Accessibility and performance audit | [`AUDIT.md`](./AUDIT.md) | |
 | PF-04 · Portfolio live, DNS walkthrough | [`docs/PF-04_DNS_WALKTHROUGH.md`](./docs/PF-04_DNS_WALKTHROUGH.md) | [portfolio](https://l3n8n-ocd.github.io/portfolio/) |
 | Survive the Crit | [portfolio `SURVIVE_THE_CRIT.md`](https://github.com/l3n8n-ocd/portfolio/blob/main/docs/SURVIVE_THE_CRIT.md) | reviewer's words still to paste |
@@ -292,7 +392,7 @@ act on.
 | Loan state machine | ✅ Built and tested: all 10 states below as one discriminated union in [`loanStateMachine.ts`](./src/features/disbursement/loanStateMachine.ts); 100 `(state, event)` pairs tested, 88 illegal ones rejected as a typed `409` |
 | Double-entry ledger | ✅ Built and tested: disbursement, repayment (principal + interest) and compensating-reversal entries in [`ledger.ts`](./src/features/disbursement/ledger.ts), each checked for `Σ debits === Σ credits`; in-memory mock API |
 | Credit scoring | ✅ Built and tested: 3-signal trust score (0–1000) with reason codes and a limit in `Centavos`, in [`src/features/scoring/`](./src/features/scoring/); demo profiles only, no real borrower data |
-| AI Underwriting & Ledger Risk Copilot (FE-06) | ✅ Built and tested: streaming chat on [`/underwriting#copilot`](https://microcredit-api-beta.vercel.app/underwriting#copilot) over `POST /api/chat`, with Stop, smart auto-scroll and `localStorage` history. Hosted-model requests pass an in-memory rate limit (10 a minute, 100 a day per client). The live URL answers with `gemini-3.5-flash-lite` on a free-tier Google key; without a key, or when its quota runs out, it answers from a local rule engine (labelled as such), not a language model ([`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) §1) |
+| AI Underwriting & Ledger Risk Copilot (FE-06) | ✅ Built and tested: streaming chat on [`/underwriting#copilot`](https://microcredit-api-beta.vercel.app/underwriting#copilot) over `POST /api/chat`, with Stop, smart auto-scroll and `localStorage` history. Every request passes a per-client limit (20 per 60 s), and hosted-model requests a second one (10 a minute, 100 a day); FE-11 caps the body at 32 KB and the function at 30 s. The live URL answers with `gemini-3.5-flash-lite` on a free-tier Google key; without a key, or when its quota runs out, it answers from a local rule engine (labelled as such), not a language model ([`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) §1) |
 | Deployed demo | ✅ [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app) (Vercel, imported from `main`; mock API, no real wallet payouts) |
 
 ## Loan Lifecycle State Machine
@@ -738,6 +838,18 @@ Write-up: [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md).
   - `npm test` 533/533 (9 new); `npm run test:e2e` adds 4 browser checks
     ([`e2e/shader-hero.spec.ts`](./e2e/shader-hero.spec.ts)) and an axe-core scan of `/shader-hero` (23/23);
     `npm run test:e2e:fold` 69/69.
+- **FE-11 · Production Deployment and README:** [`docs/FE-11_PRODUCTION_DEPLOY.md`](./docs/FE-11_PRODUCTION_DEPLOY.md) · [`src/app/api/__tests__/fe11-production-hygiene.test.ts`](./src/app/api/__tests__/fe11-production-hygiene.test.ts) · [`e2e/cross-browser.mjs`](./e2e/cross-browser.mjs)
+  - **Route hygiene:** `/api/chat` and `/api/agent` export `maxDuration = 30`, with every inner budget under it
+    (model 27 s / 24 s, fetch 5 s).
+  - **Caps:** a 32 KB body (`413`), 24 messages, 2,000 / 4,000 characters per turn (`400`), and a per-client
+    limit checked before the body is read (`429` + `Retry-After`). Refusals are `{ error, code }` with no stack.
+  - **Measured:** `npm test` 555/555 (22 new, each guard mutation-checked); Playwright 23/23, fold 69/69,
+    FE-08 31/31 and FE-07 14/14, all under the new limit with no test-only override.
+  - **Cross-browser:** 27/27 on Chromium 153, Firefox 155, WebKit 26.6 and WebKit as an iPhone at 375×812. The
+    iPhone run measured 17 form controls at 16 px. WebKit is Safari's engine, not Apple's Safari app: a real
+    iPhone pass is a TODO in the doc.
+  - **README:** screenshots, an environment variables table, key decisions, production limits and "How AI tools
+    built this".
 
 ## License
 

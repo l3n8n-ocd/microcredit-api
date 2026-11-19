@@ -83,16 +83,18 @@ export const MODEL_CONFIG = {
    * How long a hosted model may stay silent before the request is abandoned and
    * the local engine answers instead. Without this, a provider that holds the
    * connection open (or tells the SDK to retry later) hangs the chat until the
-   * host kills the function at 60 s. `totalMs` stays under that ceiling.
+   * host kills the function. FE-11 set that ceiling to 30 s (`maxDuration` in
+   * src/app/api/chat/route.ts); `totalMs` stays 3 s under it, so the fallback
+   * or error frame still has time to reach the browser.
    */
-  modelTimeout: { firstChunkMs: 25_000, chunkMs: 25_000, totalMs: 55_000 },
+  modelTimeout: { firstChunkMs: 15_000, chunkMs: 15_000, totalMs: 27_000 },
   /**
    * How long to wait for the provider's FIRST sign of life. The SDK timeouts
    * above only start counting once a response has begun, so a provider that
    * accepts the connection and then says nothing would hold the chat for the
-   * full 55 s. After this long with no output, the local engine answers.
+   * full 27 s. After this long with no output, the local engine answers.
    */
-  modelFirstResponseMs: 20_000,
+  modelFirstResponseMs: 15_000,
   /** Local rule engine pacing: one token every ~22 ms reads like model output. */
   localTokenDelayMs: 22,
   /** Local rule engine: pause before the first token, so "thinking" is a visible state. */

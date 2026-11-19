@@ -21,6 +21,7 @@
     "test:e2e:fold": "node e2e/fold.mjs",
     "test:e2e:fe08": "node e2e/fe08.mjs",
     "test:e2e:fe07": "node e2e/fe07.mjs",
+    "test:e2e:browsers": "node e2e/cross-browser.mjs",
     "agent:run": "node --use-env-proxy --no-warnings agents/sentinel-scout/run-agent.mjs",
     "agent:eval": "node --no-warnings agents/sentinel-scout/run-agent.mjs --eval",
     "prepare": "husky"

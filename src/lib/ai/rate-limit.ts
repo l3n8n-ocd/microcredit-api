@@ -90,6 +90,39 @@ export const CHAT_RATE_LIMIT: readonly RateLimitRule[] = [
 /** One limiter per server instance, shared by every request that instance handles. */
 export const chatRateLimiter = createRateLimiter(CHAT_RATE_LIMIT)
 
+/** FE-11 default for EVERY `POST /api/chat`, whichever engine answers: 20 requests per 60 s per client. */
+export const DEFAULT_REQUEST_LIMIT: RateLimitRule = { limit: 20, windowMs: 60_000 }
+
+/** A whole number in [min, max], or null for anything else (unset, "abc", "1.5", "-3", out of range). */
+function boundedInt(raw: string | undefined, min: number, max: number): number | null {
+  const text = raw?.trim() ?? ''
+  if (!/^\d+$/.test(text)) return null
+  const value = Number(text)
+  return Number.isSafeInteger(value) && value >= min && value <= max ? value : null
+}
+
+/**
+ * The general request limit, from `CHAT_RATE_LIMIT_MAX` (1–10,000 requests) and
+ * `CHAT_RATE_LIMIT_WINDOW_MS` (1 s – 24 h). A missing or invalid value falls back to the default
+ * instead of failing the deploy. Neither is a secret; both are server-only (never `NEXT_PUBLIC_`).
+ */
+export function requestRateLimitRule(env: Readonly<Record<string, string | undefined>> = process.env): RateLimitRule {
+  return {
+    limit: boundedInt(env.CHAT_RATE_LIMIT_MAX, 1, 10_000) ?? DEFAULT_REQUEST_LIMIT.limit,
+    windowMs: boundedInt(env.CHAT_RATE_LIMIT_WINDOW_MS, 1_000, 24 * 60 * 60_000) ?? DEFAULT_REQUEST_LIMIT.windowMs,
+  }
+}
+
+/** Read once per server instance, at start-up. */
+export const CHAT_REQUEST_LIMIT: RateLimitRule = requestRateLimitRule()
+
+/**
+ * FE-11: checked first on every `POST /api/chat`, before the body is read. It bounds the work one
+ * client can cause (local engine, drills and tool retries included). `chatRateLimiter` above still
+ * applies on top, to the requests that reach a paid model.
+ */
+export const chatRequestLimiter = createRateLimiter([CHAT_REQUEST_LIMIT])
+
 /**
  * The key a client is limited by: its IP as reported by the hosting proxy.
  * `x-real-ip` and the first hop of `x-forwarded-for` are set by the platform

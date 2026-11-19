@@ -231,8 +231,10 @@ route falls back to this engine and relabels the reply `local rule engine (model
 **1. A per-client rate limit** ([`src/lib/ai/rate-limit.ts`](../src/lib/ai/rate-limit.ts)). A request
 that would reach a hosted model first passes a sliding-window log: **10 a minute and 100 a day** per
 client IP. Over the limit, the route returns `429` with `Retry-After` before any stream opens, and the
-chat shows "Too many requests from this network. Try again in 50 seconds." The local engine is free, so
-it is not limited.
+chat shows "Too many requests from this network. Try again in 50 seconds." FE-11 added a second, looser
+limit in front of it: every `POST /api/chat`, local engine included, gets 20 per 60 s per client
+(`CHAT_RATE_LIMIT_MAX`, `CHAT_RATE_LIMIT_WINDOW_MS`), checked before the body is read
+([`docs/FE-11_PRODUCTION_DEPLOY.md`](./FE-11_PRODUCTION_DEPLOY.md) §1).
 
 - *Sliding window, not fixed window.* A fixed-window counter resets on the clock minute, so 10 requests
   at 0:59 and 10 more at 1:01 both pass. The log measures back from "now", so that burst is refused.
@@ -242,8 +244,9 @@ it is not limited.
   instances. It slows a script down. It is not a spend guarantee. A shared store (Upstash Redis) would
   make it exact; that is not built.
 
-**2. Per-request caps.** At most 24 messages and 2,000 characters per user message (`CHAT_LIMITS`,
-enforced on both sides), `maxOutputTokens: 4096`, `maxRetries: 1`.
+**2. Per-request caps.** At most 24 messages, 2,000 characters per user message and 4,000 per echoed
+assistant turn, and a 32 KB body (`CHAT_LIMITS`, enforced on both sides; FE-11). `maxOutputTokens: 4096`,
+`maxRetries: 0`, and the model call gives up at 27 s, under the route's 30 s `maxDuration`.
 
 **3. The provider spend limit.** This is the guarantee, and it is set outside this repo: a dedicated key
 in its own workspace with a low monthly limit. For a public demo, also set

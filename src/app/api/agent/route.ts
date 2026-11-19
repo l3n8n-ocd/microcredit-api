@@ -12,19 +12,27 @@
  *   - `run_checks` reports "not available on this host": a public endpoint
  *     does not spawn tsc and Vitest;
  *   - every client is rate-limited, because each run calls GitHub (and a
- *     model, with the model planner).
+ *     model, with the model planner);
+ *   - FE-11: a 30 s ceiling. Advisory fetches give up after 5 s and the model
+ *     planner after 24 s, so a slow run ends in a `halt` event, not a cut stream.
+ *
+ * FE-11 order: rate limit (before the body is read) → 4 KB body cap (`413`) →
+ * JSON (`400`) → `request` at most 600 characters (`400`). Refusals are
+ * `{ error, code }` JSON with fixed messages.
  */
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRateLimiter, clientKey, describeWait } from '../../../lib/ai/rate-limit.ts'
+import { apiError, readJsonBody } from '../../../lib/http/request-guard.ts'
 import { newTriageId, runTriage } from '../../../lib/sentinel-scout/engine.ts'
 import { resolvePlannerModel } from '../../../lib/sentinel-scout/model.ts'
-import { parseAgentRequest } from '../../../lib/sentinel-scout/protocol.ts'
+import { AGENT_LIMITS, parseAgentRequest } from '../../../lib/sentinel-scout/protocol.ts'
 import { createToolbox } from '../../../lib/sentinel-scout/tools.ts'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+/** FE-11: the Vercel function ceiling, in seconds. `AGENT_LIMITS` (protocol.ts) keeps a run inside it. */
+export const maxDuration = 30
 
 /** Per client: 6 runs a minute, 40 a day. In-memory, per server instance (see FE-06 notes). */
 const limiter = createRateLimiter([
@@ -33,22 +41,17 @@ const limiter = createRateLimiter([
 ])
 
 export async function POST(req: Request): Promise<Response> {
-  let body: unknown
-  try {
-    body = await req.json()
-  } catch {
-    return Response.json({ error: 'Request body must be JSON.' }, { status: 400 })
-  }
-  const parsed = parseAgentRequest(body)
-  if (!parsed.ok) return Response.json({ error: parsed.error }, { status: 400 })
-
   const verdict = limiter.check(clientKey(req.headers))
   if (!verdict.ok) {
-    return Response.json(
-      { error: `Too many runs from this network. Try again in ${describeWait(verdict.retryAfterSeconds)}.` },
-      { status: 429, headers: { 'Retry-After': String(verdict.retryAfterSeconds) } },
-    )
+    return apiError(429, 'RATE_LIMITED', `Too many runs from this network. Try again in ${describeWait(verdict.retryAfterSeconds)}.`, {
+      retryAfterSeconds: verdict.retryAfterSeconds,
+    })
   }
+
+  const read = await readJsonBody(req, AGENT_LIMITS.maxBodyBytes)
+  if (!read.ok) return read.response
+  const parsed = parseAgentRequest(read.body)
+  if (!parsed.ok) return apiError(400, 'INVALID_REQUEST', parsed.error)
 
   const model = parsed.planner === 'model' ? resolvePlannerModel() : null
   const now = new Date()
@@ -59,6 +62,7 @@ export async function POST(req: Request): Promise<Response> {
     draftsDir: join(tmpdir(), 'sentinel-scout', 'drafts'),
     cacheDir: join(tmpdir(), 'sentinel-scout', 'cache'),
     snapshotDir: join(process.cwd(), 'agents/sentinel-scout/snapshots'),
+    timeoutMs: AGENT_LIMITS.fetchTimeoutMs,
   })
 
   const encoder = new TextEncoder()
@@ -71,6 +75,7 @@ export async function POST(req: Request): Promise<Response> {
           toolbox,
           triageId: newTriageId(now, now.getUTCSeconds() + 1),
           emit: send,
+          modelTimeoutMs: AGENT_LIMITS.modelTimeoutMs,
           ...(model === null ? {} : { model }),
         })
       } catch (error) {

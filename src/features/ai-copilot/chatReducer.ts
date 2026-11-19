@@ -298,16 +298,20 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 /**
  * Flattens the UI conversation to what the server accepts: text only, no empty
  * turns (a reply stopped before its first token has nothing to send), the most
- * recent `maxMessages`, and a user turn first.
+ * recent `maxMessages`, a user turn first, and (FE-11) small enough that the request body stays under
+ * the server's byte cap: the oldest turns go first, the newest user turn always stays.
  */
 export function toWireHistory(messages: readonly ChatMessage[]): readonly WireMessage[] {
-  const turns = messages
+  let turns: WireMessage[] = messages
     .map((message) => ({ role: message.role, content: messageText(message).trim() }))
     .filter((turn) => turn.content !== '')
     .map((turn) =>
       turn.role === 'assistant' ? { ...turn, content: turn.content.slice(0, CHAT_LIMITS.maxAssistantChars) } : turn,
     )
     .slice(-CHAT_LIMITS.maxMessages)
+  const budget = CHAT_LIMITS.maxBodyBytes - CHAT_LIMITS.historyHeadroomBytes
+  const encoder = new TextEncoder()
+  while (turns.length > 1 && encoder.encode(JSON.stringify({ messages: turns })).byteLength > budget) turns = turns.slice(1)
   const firstUser = turns.findIndex((turn) => turn.role === 'user')
   return firstUser === -1 ? [] : turns.slice(firstUser)
 }

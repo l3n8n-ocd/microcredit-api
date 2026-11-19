@@ -13,7 +13,7 @@ import { scoreApplicant } from '../../../features/scoring/scoreEngine.ts'
 import { LEGAL_TRANSITIONS } from '../../../features/disbursement/loanStateMachine.ts'
 import { buildLocalReply, detectTopic, streamLocalReply, tokenize } from '../local-engine.ts'
 import { chatStats } from '../chat-stats.ts'
-import { chatRateLimiter } from '../rate-limit.ts'
+import { chatRateLimiter, chatRequestLimiter } from '../rate-limit.ts'
 import {
   LOCAL_ENGINE_LABEL,
   STARTER_PROMPTS,
@@ -60,6 +60,8 @@ afterEach(() => {
   injected.engine = null
   injected.timeout = null
   chatRateLimiter.reset()
+  // FE-11: the general per-client limit is per server instance too; each test starts with an empty log.
+  chatRequestLimiter.reset()
   chatStats.reset()
   vi.unstubAllEnvs()
   vi.restoreAllMocks()
@@ -467,7 +469,11 @@ describe('POST /api/chat — rate limit on the hosted model', () => {
     const retryAfter = Number(limited.headers.get('retry-after'))
     expect(retryAfter).toBeGreaterThan(0)
     expect(retryAfter).toBeLessThanOrEqual(60)
-    expect(await limited.json()).toEqual({ error: expect.stringMatching(/^Too many requests from this network\. Try again in \d+ seconds?\.$/) })
+    expect(await limited.json()).toEqual({
+      error: expect.stringMatching(/^Too many requests from this network\. Try again in \d+ seconds?\.$/),
+      code: 'RATE_LIMITED',
+      retryAfterSeconds: retryAfter,
+    })
 
     // The 11th request never reached the provider: nothing was billed for it.
     expect(model.doStreamCalls).toHaveLength(10)
@@ -580,10 +586,25 @@ describe('GET /api/chat — counters that make the server side checkable without
     const response = GET()
     expect(response.headers.get('cache-control')).toBe('no-store')
     const body = (await response.json()) as Record<string, unknown>
-    expect(Object.keys(body).sort()).toEqual(['cancels', 'commit', 'engine', 'instance', 'instanceStartedAt', 'last', 'outcomes', 'rateLimit', 'rateLimited'])
+    expect(Object.keys(body).sort()).toEqual([
+      'cancels',
+      'commit',
+      'engine',
+      'instance',
+      'instanceStartedAt',
+      'last',
+      'limits',
+      'outcomes',
+      'rateLimit',
+      'rateLimited',
+      'requestLimit',
+    ])
     expect(body.engine).toEqual({ kind: 'local', label: LOCAL_ENGINE_LABEL })
     expect(body.outcomes).toEqual({ done: 0, aborted: 0, error: 0, fallback: 0 })
     expect(body.rateLimit).toMatchObject({ trackedClients: 0, rules: [{ limit: 10 }, { limit: 100 }] })
+    // FE-11: the general limit and the caps, as rules only (no client keys).
+    expect(body.requestLimit).toEqual({ rule: { limit: 20, windowMs: 60_000 }, appliesTo: 'every POST', trackedClients: 0 })
+    expect(body.limits).toMatchObject({ maxMessages: 24, maxUserChars: 2000, maxAssistantChars: 4000, maxBodyBytes: 32_768, maxDurationSeconds: 30 })
     expect(body.last).toBeNull()
   })
 

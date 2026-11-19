@@ -59,8 +59,18 @@ export const CHAT_LIMITS = {
   maxMessages: 24,
   /** Characters in one user message (the textarea enforces the same number). */
   maxUserChars: 2000,
-  /** Characters in one assistant turn echoed back as history. */
-  maxAssistantChars: 12_000,
+  /**
+   * Characters in one assistant turn echoed back as history. FE-11 lowered it from 12,000: the client
+   * keeps the first 4,000 characters of an old reply, which is enough context for a follow-up.
+   */
+  maxAssistantChars: 4_000,
+  /**
+   * FE-11: the largest JSON body the server reads (src/lib/http/request-guard.ts). The client drops the
+   * oldest turns until the history fits in `maxBodyBytes − historyHeadroomBytes`.
+   */
+  maxBodyBytes: 32 * 1024,
+  /** Room left for `requestId`, `toolCall` and the JSON wrapper. */
+  historyHeadroomBytes: 2 * 1024,
 } as const
 
 /**
