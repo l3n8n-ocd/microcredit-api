@@ -96,6 +96,8 @@ Rules that follow from the table:
     `prefers-reduced-motion`, where the "Thinking…" text carries the meaning.
   - one scoped duration exception (FE-AA1): the SmartActionButton. See "Motion: SmartActionButton" below.
   - one scoped 3D exception (FE-AA2): the WebGL canvas on `/3d-lab`. See "Motion: 3D lab canvas" below.
+  - one scoped shader exception (FE-AA3): the Ledger Aurora hero on `/shader-hero`. See "Motion: shader hero"
+    below.
 - **Same skeleton for every case:** Problem → What I Did & Decided → What Came of It, as in
   [`FRAME_IT_AS_CASES.md` §3](./FRAME_IT_AS_CASES.md#3--the-framed-case-studies). The reader learns the
   layout once.
@@ -144,6 +146,24 @@ passes 150 ms. Its job is to act out the `201` / `409` outcomes on a 3D terminal
   named in text beside its radio.
 - The 409 colour on the model is `#e11d48` (rose-600); "crimson" from the brief would be the red family,
   which stays banned.
+
+### Motion: shader hero (FE-AA3 scoped exception)
+
+The Ledger Aurora fragment shader in [`src/features/shader-hero/`](../src/features/shader-hero/) is the third place
+motion passes 150 ms, and the only looping background. Its job is coursework: a fullscreen GLSL hero behind the
+One Claim. It lives on `/shader-hero`; `/` links to it with a static card. Walkthrough and measurements:
+[`FE-AA3_SIGNATURE_SHADER.md`](./FE-AA3_SIGNATURE_SHADER.md).
+
+| Rule | How it holds |
+| --- | --- |
+| It loops only when someone can see it | The `requestAnimationFrame` loop runs while `document.visibilityState` is `visible` and an `IntersectionObserver` sees the hero. `u_time` freezes otherwise. |
+| It never upstages the text | No channel passes 0.36 (`min(color, vec3(0.36))`), and every word sits on a `bg-slate-950/65` scrim. Measured on pixels: 7.60:1 or more for every line, running and static. |
+| Phones pay for 1.5x at most | `clampDpr()` caps the drawing buffer at 1.5x the CSS size. |
+| Reduced motion is still | Under `prefers-reduced-motion: reduce`, the on-page toggle, or a WebGL failure, no canvas or context is created. A still CSS gradient in the same shades shows instead. |
+| Allowed hues only | slate-950 `#020617` (it replaces the brief's `#060B14`, outside the allowed hues), slate-900, slate-800, sky-600, sky-400, emerald-600 and emerald-500. They are pixels in a picture, not UI signals; emerald on the page still means "passed". |
+
+The static gradient is the one gradient in `src/`. It sits behind the scrim, never directly behind text, and
+exists only as the shader's stand-in.
 
 ---
 

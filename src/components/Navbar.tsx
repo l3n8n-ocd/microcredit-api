@@ -15,6 +15,7 @@ const NAV_LINKS = [
   { href: '/agent', label: 'Agent' },
   { href: '/motion-lab', label: 'Motion Lab' },
   { href: '/3d-lab', label: '3D Lab' },
+  { href: '/shader-hero', label: 'Shader' },
 ] as const
 
 /**

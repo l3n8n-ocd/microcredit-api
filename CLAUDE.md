@@ -80,13 +80,13 @@ lint-staged + commitlint (git hooks), GitHub Actions (CI). Capstone spec: [`SPEC
 | `npm run dev`       | Start the Next.js dev server (App Router)                  |
 | `npm run typecheck` | Strict-mode type check (`tsc --noEmit`)                    |
 | `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports except Next route files)|
-| `npm test`          | Run Vitest once (524 tests in `src/`, `playground/`, `agents/`) |
+| `npm test`          | Run Vitest once (533 tests in `src/`, `playground/`, `agents/`) |
 | `npm run build`     | Production build (`next build`)                            |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
 | `npm run test:e2e:fe08` | FE-08: after `build`, the sabotage drill (31 browser checks) and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e:fe07` | FE-07: after `build`, the tool cards (14 browser checks) and the 6 tool-state screenshots |
-| `npm run test:e2e`  | After `build`: Playwright `e2e/*.spec.ts`: the primary flow, `/motion-lab`, `/3d-lab`, and the FE-10 keyboard-only flow + axe-core scan of 5 routes (`playwright test`, `next start`) |
+| `npm run test:e2e`  | After `build`: Playwright `e2e/*.spec.ts`: the primary flow, `/motion-lab`, `/3d-lab`, `/shader-hero`, and the FE-10 keyboard-only flow + axe-core scan of 6 routes (`playwright test`, `next start`) |
 | `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes responsive at 375px/1280px, the AI Copilot streaming / Stop / scroll checks, and keyboard-only checks on `/playground` |
 
 **Before saying any change is done, run `typecheck`, `lint`, and `test`, and
@@ -463,7 +463,13 @@ upstages it.
    201 / 409 motions run once (at most 1.75 s) and hold still. Under `prefers-reduced-motion` the canvas is
    never created and a still SVG blueprint shows instead. Its chassis swatches are material paint in allowed
    families (slate, emerald, sky, amber), named in text. Details: `docs/PORTFOLIO_DESIGN_SYSTEM.md`
-   "Motion: 3D lab canvas". Nothing else goes past 150 ms.
+   "Motion: 3D lab canvas".
+   *Scoped shader exception (FE-AA3):* the Ledger Aurora fragment shader in `src/features/shader-hero/`, on
+   `/shader-hero` only (`/` gets a static link card). It loops while the tab is visible and the hero is on
+   screen, and pauses otherwise. DPR is capped at 1.5, and no channel passes 0.36. Every word sits on a
+   `bg-slate-950/65` scrim, measured at 7:1 or more on real pixels. Under `prefers-reduced-motion`, the
+   on-page toggle or a WebGL failure, no canvas is created and a still CSS gradient in the same shades shows
+   instead. Details: `docs/PORTFOLIO_DESIGN_SYSTEM.md` "Motion: shader hero". Nothing else goes past 150 ms.
 5. **A new token, font or hue needs a reason in the design system doc first**, in the same commit.
 
 *Check:* this prints nothing.

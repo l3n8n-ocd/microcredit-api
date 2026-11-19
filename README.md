@@ -54,7 +54,7 @@ cp .env.example .env.local   # optional: placeholders keep every feature on the 
 ```bash
 npm run typecheck            # tsc --noEmit, strict
 npm run lint                 # oxlint, warnings fail
-npm test                     # Vitest: 524 tests, including the 6 SentinelScout evals
+npm test                     # Vitest: 533 tests, including the 6 SentinelScout evals
 npm run agent:eval           # SentinelScout: the 6 FL-06 eval cases; exits 1 unless 6/6
 npm run agent:run            # SentinelScout: one real triage over MCP stdio
 npm run build                # next build
@@ -75,8 +75,8 @@ npm run start                # http://localhost:3000
 
 ```bash
 npx playwright install --with-deps chromium
-npm run test:e2e             # 18 checks: primary flow, keyboard-only flow, axe-core, /motion-lab, /3d-lab
-npm run test:e2e:fold        # 67 checks: above the fold, 375 px / 1280 px on every route, copilot streaming
+npm run test:e2e             # 23 checks: primary flow, keyboard-only flow, axe-core, /motion-lab, /3d-lab, /shader-hero
+npm run test:e2e:fold        # 69 checks: above the fold, 375 px / 1280 px on every route, copilot streaming
 ```
 
 **Optional environment variables** (`.env.local`; all server-only, never `NEXT_PUBLIC_`):
@@ -93,10 +93,10 @@ npm run test:e2e:fold        # 67 checks: above the fold, 375 px / 1280 px on ev
 | `npm run build` / `npm run start` | Production build (`next build`) / serve it (`next start`) |
 | `npm run typecheck` | Run the TypeScript compiler in strict mode |
 | `npm run lint` | Run oxlint; warnings fail the run |
-| `npm test` | Run the Vitest suite once (524 tests) |
+| `npm test` | Run the Vitest suite once (533 tests) |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
-| `npm run test:e2e` | After `build`: Playwright (`e2e/*.spec.ts`): the primary flow (Disburse replay, then the copilot with a tool card, mocked `/api/chat`), the FE-AA1 `/motion-lab` checks, the FE-AA2 `/3d-lab` checks and the FE-10 keyboard-only flow + axe-core scan |
+| `npm run test:e2e` | After `build`: Playwright (`e2e/*.spec.ts`): the primary flow (Disburse replay, then the copilot with a tool card, mocked `/api/chat`), the FE-AA1 `/motion-lab` checks, the FE-AA2 `/3d-lab` checks, the FE-AA3 `/shader-hero` checks and the FE-10 keyboard-only flow + axe-core scan |
 | `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes at 375px/1280px with no overflow, and the AI Copilot streaming checks |
 | `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 31 browser checks and the 4 Checkpoint 1 screenshots |
 | `npm run test:e2e:fe07` | After `build`: FE-07 tool cards, 14 browser checks and the 6 tool-state screenshots |
@@ -213,10 +213,10 @@ Full list: [`docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md`](./docs/FL-09_FL-10_SHO
 >
 > **What checks it on every push** ([CI](./.github/workflows/ci.yml)):
 > - `typecheck`, `lint`;
-> - 524 Vitest tests, including the six SentinelScout evals;
+> - 533 Vitest tests, including the six SentinelScout evals;
 > - `next build`;
-> - 18 Playwright checks, including a keyboard-only run and axe-core on 5 routes;
-> - the 67-check fold script.
+> - 23 Playwright checks, including a keyboard-only run and axe-core on 6 routes;
+> - the 69-check fold script.
 >
 > Every number in the docs comes from a run and says how it was measured; where nothing measured it, the docs say TODO.
 > The checks I did by hand are listed in
@@ -242,6 +242,7 @@ Full list: [`docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md`](./docs/FL-09_FL-10_SHO
 | FE-09 · Testing pass | [`docs/FE-09_TESTING_PASS.md`](./docs/FE-09_TESTING_PASS.md) | [CI](https://github.com/l3n8n-ocd/microcredit-api/actions/workflows/ci.yml) |
 | FE-AA1 · Buttons with a brain | [`docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md`](./docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md) | [`/motion-lab`](https://microcredit-api-beta.vercel.app/motion-lab) |
 | FE-AA2 · 3D on the web | [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md) | [`/3d-lab`](https://microcredit-api-beta.vercel.app/3d-lab) |
+| FE-AA3 · Signature hero: a fullscreen shader | [`docs/FE-AA3_SIGNATURE_SHADER.md`](./docs/FE-AA3_SIGNATURE_SHADER.md) | [`/shader-hero`](https://microcredit-api-beta.vercel.app/shader-hero) |
 | FE-10 · Accessibility and performance audit | [`AUDIT.md`](./AUDIT.md) | |
 | PF-04 · Portfolio live, DNS walkthrough | [`docs/PF-04_DNS_WALKTHROUGH.md`](./docs/PF-04_DNS_WALKTHROUGH.md) | [portfolio](https://l3n8n-ocd.github.io/portfolio/) |
 | Survive the Crit | [portfolio `SURVIVE_THE_CRIT.md`](https://github.com/l3n8n-ocd/portfolio/blob/main/docs/SURVIVE_THE_CRIT.md) | reviewer's words still to paste |
@@ -722,6 +723,21 @@ Write-up: [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md).
     `agent:eval` 6/6, and `agent:run` completed in 4 tool calls.
   - **A retrospective to Week-1 me (713 words)**, a 4-minute live demo runbook, and the master deliverable index.
     The runbook was checked step by step on the live site: Simulate needs **Reset demo** after a real payout.
+- **FE-AA3 · Signature Hero: A Fullscreen Shader:** [`/shader-hero`](https://microcredit-api-beta.vercel.app/shader-hero) · [`src/features/shader-hero/LedgerAuroraShader.ts`](./src/features/shader-hero/LedgerAuroraShader.ts) · [`src/features/shader-hero/FullscreenShaderHero.tsx`](./src/features/shader-hero/FullscreenShaderHero.tsx) · [`docs/FE-AA3_SIGNATURE_SHADER.md`](./docs/FE-AA3_SIGNATURE_SHADER.md) · [screenshot](./docs/assets/curated/fe-aa3-shader-hero.png)
+  - **Fallback, in one line:** "With reduced motion on or no WebGL, the hero shows a still gradient in the same
+    colours and never starts the loop; otherwise it renders at no more than 1.5x pixel ratio and pauses whenever
+    the tab is hidden or the hero is off-screen."
+  - **The shader:** "Ledger Aurora", an original GLSL ES 1.00 fragment shader driven by `u_time`, `u_resolution`
+    and `u_mouse`. It draws domain-warped fBm ribbons, a sky and emerald glow where they fold, and ruled ledger
+    lines that bend toward the cursor. One triangle, no textures, 0 network requests.
+  - **Readable over motion:** no channel passes 0.36 and the text sits on a `bg-slate-950/65` scrim. Measured on
+    real pixels over 4 frames, every line is 7.66:1 or more (the headline 19.35:1, the emerald CTA 10.40:1).
+  - **Ships responsibly:** DPR capped at 1.5 (a 3x screen gets a 1.5x buffer); the loop stops when the tab is
+    hidden or the hero is off-screen, and `u_time` resumes where it stopped; the context is lost on unmount.
+  - **Not claimed:** frame time on a real phone and a Lighthouse run on `/shader-hero` are TODOs in the doc.
+  - `npm test` 533/533 (9 new); `npm run test:e2e` adds 4 browser checks
+    ([`e2e/shader-hero.spec.ts`](./e2e/shader-hero.spec.ts)) and an axe-core scan of `/shader-hero` (23/23);
+    `npm run test:e2e:fold` 69/69.
 
 ## License
 

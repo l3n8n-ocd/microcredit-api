@@ -35,6 +35,27 @@ export default function HomePage() {
           </Link>
         </div>
       </aside>
+      {/* FE-AA3: a plain link, no shader on `/`. The shader exception in CLAUDE.md §12 covers /shader-hero only. */}
+      <section aria-labelledby="shader-hero-heading" className="bg-canvas px-4 pb-6 sm:px-8">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 rounded-lg border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 id="shader-hero-heading" className="text-lg font-semibold text-ink">
+              Signature hero: a fullscreen GLSL shader
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-slate-700">
+              The same claim over a hand-written shader that uses <code className="font-mono">u_time</code>,{' '}
+              <code className="font-mono">u_resolution</code> and <code className="font-mono">u_mouse</code>. The pixel ratio
+              is capped at 1.5, it pauses off-screen, and there is a still fallback for reduced motion.
+            </p>
+          </div>
+          <Link
+            href="/shader-hero"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md border border-main px-4 text-sm font-semibold text-ink transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Open the shader hero →
+          </Link>
+        </div>
+      </section>
       {/* FE-AA2: below the fold with the copilot card. Three.js loads only if "Load the 3D inspector" is pressed. */}
       <section aria-labelledby="vault-3d-heading" className="bg-canvas px-4 pb-10 sm:px-8">
         <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-5">

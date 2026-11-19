@@ -124,7 +124,7 @@ test('the primary flow completes by keyboard alone, with visible focus at every 
   test.info().annotations.push({ type: 'focus path', description: path.map((s) => `${s.label} [${s.indicator}]`).join(' → ') })
 })
 
-for (const route of ['/', '/underwriting', '/playground', '/motion-lab', '/3d-lab']) {
+for (const route of ['/', '/underwriting', '/playground', '/motion-lab', '/3d-lab', '/shader-hero']) {
   test(`axe-core: 0 violations on ${route} at 375 px`, async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 })
     await page.goto(route, { waitUntil: 'networkidle' })
