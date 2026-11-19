@@ -377,6 +377,39 @@ describe('POST /api/chat — a hosted model that goes quiet', () => {
     expect(modelLogs[0]?.parts).toMatchObject({ 'reasoning-delta': expect.any(Number) })
   })
 
+  it('FE-11: ends a reply our time budget cut mid-stream as done "time-limit", keeping the text, not as an error', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    injected.timeout = { firstChunkMs: 5_000, chunkMs: 5_000, totalMs: 300 }
+    let timer: ReturnType<typeof setInterval> | undefined
+    injected.engine = {
+      kind: 'google',
+      label: 'mock-model',
+      // Answers, and is still answering when the total budget runs out: what live Gemini did on a long reply.
+      model: new MockLanguageModelV4({
+        doStream: async () => ({
+          stream: new ReadableStream<StreamPart>({
+            start(controller) {
+              controller.enqueue({ type: 'stream-start', warnings: [] })
+              controller.enqueue({ type: 'text-start', id: 't1' })
+              timer = setInterval(() => controller.enqueue({ type: 'text-delta', id: 't1', delta: 'state ' }), 20)
+            },
+            cancel() {
+              clearInterval(timer)
+            },
+          }),
+        }),
+      }),
+    }
+
+    const events = await readEvents(await POST(chatRequest(ask('Walk me through the 10 loan states.'))))
+    clearInterval(timer)
+    expect(joinTokens(events)).toMatch(/^(state )+$/)
+    expect(events.some((event) => event.type === 'error')).toBe(false)
+    expect(events.at(-1)).toEqual({ type: 'done', finishReason: 'time-limit' })
+    // No hand-over to the local engine: the partial answer is the model's and stays labelled as such.
+    expect(events.filter((event) => event.type === 'meta')).toHaveLength(1)
+  })
+
   it('passes the engine reasoning effort to the model call', async () => {
     const model = mockModel([
       { type: 'stream-start', warnings: [] },

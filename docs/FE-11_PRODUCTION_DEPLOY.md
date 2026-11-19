@@ -75,7 +75,7 @@ that `error` holds no stack frame, `Error:` or file path.
 
 ### Evidence
 
-- **Vitest:** 555/555, including 22 new tests in `fe11-production-hygiene.test.ts`, which cover:
+- **Vitest:** 556/556, including 22 new tests in `fe11-production-hygiene.test.ts` (plus the `time-limit` case in §2.1), which cover:
   - `maxDuration === 30` on both routes, and every inner budget under it;
   - `413` from a declared length, from a streamed body, and at exactly 32 KB + 1 byte;
   - `400` codes for each cap;
@@ -105,11 +105,37 @@ that `error` holds no stack frame, `Error:` or file path.
 | `maxDuration` set explicitly | ✅ | 30 s on both streaming routes: a ceiling chosen for these routes, with every inner budget under it (§1). |
 | Provider spend limit | **TODO (Lenon)** | This is the real cost cap, and it is set in the Google AI Studio / Anthropic console, outside this repo. It has not been confirmed from here. |
 | Custom domain | Not used | Production stays on `microcredit-api-beta.vercel.app`. To add one: Vercel project → Settings → Domains → add the name, then create the DNS record Vercel shows, as in [`PF-04_DNS_WALKTHROUGH.md`](./PF-04_DNS_WALKTHROUGH.md) for the portfolio. Then update the README links and `NEXT_PUBLIC_APP_URL`. |
-| Live after this commit | **TODO: next commit** | Re-run `BASE_URL=https://microcredit-api-beta.vercel.app npm run test:e2e:browsers`, read `GET /api/chat` → `commit`, `requestLimit`, `limits`, and send one oversized body (`413`). Results go in §2.1. |
+| Live after this commit | ✅ with one finding | §2.1: caps live, `413` / `400` live; `429` shown on `next start` (this machine's egress rotates addresses); a 30 s cut on a long reply, fixed in the next commit. |
 
 ### 2.1 Live verification after deploy
 
-TODO: filled in by the follow-up `docs(fe-11)` commit, once Vercel serves this commit.
+Checked on 2026-11-19 against `https://microcredit-api-beta.vercel.app` once `GET /api/chat` reported `commit: "c565410"`.
+
+| Check | Result |
+| --- | --- |
+| `GET /api/chat` | `commit: "c565410"`, engine `gemini-3.5-flash-lite`, `requestLimit.rule` `{ limit: 20, windowMs: 60000 }`, `limits.maxDurationSeconds: 30`, `maxBodyBytes: 32768` |
+| 33 KB body to `/api/chat` | `413 {"error":"Request body is over 32 KB.","code":"BODY_TOO_LARGE"}` |
+| 25 messages | `400 {"error":"At most 24 messages per request.","code":"INVALID_REQUEST"}` |
+| 5 KB body to `/api/agent` | `413 {"error":"Request body is over 4 KB.","code":"BODY_TOO_LARGE"}` |
+| 21 requests in a row | **429 not seen from this machine.** All 22 answered `400`. One instance answered every request (`instance: a55ee854`), yet `requestLimit.trackedClients` rose from 0 to 13 during the run. This sandbox's outbound proxy leaves through rotating addresses, so Vercel saw a dozen clients. The same build on `next start` answered request 21 with `429`, `Retry-After: 60` and `{"code":"RATE_LIMITED","retryAfterSeconds":60}`. **TODO (Lenon):** repeat the 21 requests from one home connection. |
+| Cross-browser matrix on live (`BROWSERS=chrome,safari`) | WebKit desktop and WebKit 375×812: all checks passed. Chromium: everything passed except the copilot, which led to the finding below. Firefox could not load the site from here: the sandbox's TLS proxy uses a certificate authority that Firefox's own store does not trust (`SEC_ERROR_UNKNOWN_ISSUER`). Certificate checks were not switched off to get around it, so Firefox's result is the local-build run in §3. |
+
+**Finding: the 30 s ceiling cut a long live reply, and the UI blamed the model.**
+- **What happened.** On live, Gemini started streaming the 10-state walkthrough and was still streaming when the
+  new 27 s budget ran out. The reply was cut, and the card said "The model stopped responding part-way through"
+  (`ERR_MID_STREAM`).
+- **Why that was wrong.** The model had not stopped; our own budget stopped it. The same prompt had finished in
+  about 12 s a few minutes earlier, so Gemini's speed varies from run to run. Before FE-11, the 55 s budget let
+  this reply finish.
+- **Fix** (in the commit after `c565410`):
+  - when our budget ends a reply that is already streaming, the route sends `done` with
+    `finishReason: "time-limit"`;
+  - the partial answer stays, labelled with the model's name, and the UI marks it "[Ended early: time-limit]";
+  - a real provider failure mid-stream still gets the error card.
+- **Tests.** The `chatRoute.test.ts` case "ends a reply our time budget cut mid-stream" failed before the fix and
+  passes after it.
+- **Trade-off.** 30 s stays, as the brief asked. The cost is that a slow model can now end a long answer early,
+  and say so. Raising `maxDuration` back to 60 would let long answers finish; that is Lenon's call.
 
 ## 3 · Cross-browser matrix
 
@@ -183,7 +209,7 @@ in CLAUDE.md §7. That is why the FE-10 performance work shipped as `fix(fe-10)`
 | --- | --- |
 | `npm run typecheck` | exit 0 |
 | `npm run lint` | exit 0 |
-| `npm test` | 555/555 |
+| `npm test` | 556/556 |
 | `npm run build` | exit 0; `/api/chat` and `/api/agent` are dynamic (`ƒ`) |
 | `npm run test:e2e` | 23/23 |
 | `npm run test:e2e:fold` | 69/69 |
@@ -195,4 +221,4 @@ in CLAUDE.md §7. That is why the FE-10 performance work shipped as `fix(fe-10)`
 - A real iPhone or Apple Safari pass: TODO, see §3.
 - The provider-side spend limit: TODO, see §2.
 - An exact, cross-instance rate limit: not built, see §1, decision 6.
-- Live results for this commit: TODO in §2.1, filled in by the follow-up commit.
+- A `429` seen on the live URL from a single address: TODO, see §2.1.

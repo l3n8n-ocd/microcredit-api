@@ -441,6 +441,18 @@ export async function POST(req: Request): Promise<Response> {
             error instanceof Error ? error.name : 'unknown error',
             status === null ? 'no HTTP status' : `HTTP ${status}`,
           )
+          const timedOut =
+            progress.stalled ||
+            (error instanceof ModelSilentError && error.reason === 'model call timed out') ||
+            (error instanceof Error && error.name === 'TimeoutError')
+          if (timedOut && progress.deltas > 0) {
+            // FE-11: OUR time budget (27 s, under the 30 s maxDuration) ended a reply that was still streaming.
+            // The model did not fail, so this is no error card: the partial answer stays and the UI marks it
+            // "[Ended early: time-limit]".
+            log('error', null, status)
+            send({ type: 'done', finishReason: 'time-limit' })
+            return
+          }
           if (progress.deltas > 0 || progress.toolEvents > 0) {
             log('error', null, status)
             send({ type: 'error', message: 'The model stopped responding part-way through. The partial reply is kept.' })
@@ -451,10 +463,6 @@ export async function POST(req: Request): Promise<Response> {
           // The label carries the status, so "wrong key" and "wrong model ID" can be
           // told apart from the browser without access to the server logs.
           log('fallback', null, status)
-          const timedOut =
-            progress.stalled ||
-            (error instanceof ModelSilentError && error.reason === 'model call timed out') ||
-            (error instanceof Error && error.name === 'TimeoutError')
           const reason = timedOut
             ? describeTimeout(progress)
             : error instanceof ModelSilentError

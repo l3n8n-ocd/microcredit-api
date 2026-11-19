@@ -80,7 +80,7 @@ lint-staged + commitlint (git hooks), GitHub Actions (CI). Capstone spec: [`SPEC
 | `npm run dev`       | Start the Next.js dev server (App Router)                  |
 | `npm run typecheck` | Strict-mode type check (`tsc --noEmit`)                    |
 | `npm run lint`      | oxlint; fails on any warning (no `any`, no default exports except Next route files)|
-| `npm test`          | Run Vitest once (555 tests in `src/`, `playground/`, `agents/`) |
+| `npm test`          | Run Vitest once (556 tests in `src/`, `playground/`, `agents/`) |
 | `npm run build`     | Production build (`next build`)                            |
 | `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
 | `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |

@@ -17,6 +17,7 @@
  *   6. the viewport meta allows pinch zoom, and the body's `min-h-dvh` fills the dynamic viewport.
  *
  * Needs Firefox and WebKit: `npx playwright install firefox webkit` (plus `install-deps` on Linux).
+ * BROWSERS=chrome,firefox,safari,mobile picks a subset.
  * Locators are roles, labels and visible text (docs/FE-09_TESTING_PASS.md §1).
  */
 import { spawn } from 'node:child_process'
@@ -38,6 +39,10 @@ const TARGETS = [
     options: { ...iphone, viewport: { width: 375, height: 812 }, screen: { width: 375, height: 812 }, deviceScaleFactor: 3 },
   },
 ]
+
+// BROWSERS=chrome,safari,mobile runs a subset (names matched case-insensitively against the target names).
+const only = (process.env.BROWSERS ?? '').toLowerCase().split(',').map((name) => name.trim()).filter(Boolean)
+const selected = only.length === 0 ? TARGETS : TARGETS.filter((target) => only.some((name) => target.name.toLowerCase().includes(name)))
 
 let server = null
 if (process.env.BASE_URL === undefined) {
@@ -62,7 +67,7 @@ function check(target, label, ok, detail = '') {
 }
 
 try {
-  for (const target of TARGETS) {
+  for (const target of selected) {
     const browser = await target.type.launch()
     const context = await browser.newContext(target.options)
     const page = await context.newPage()
@@ -114,12 +119,13 @@ try {
     await prompt.fill('Walk me through the 10 loan states.')
     await prompt.press('Enter')
     const status = page.getByRole('status').filter({ hasText: /Copilot|Reply complete|Stopped/ })
+    // Live, a hosted model may use its whole 27 s budget and then hand over to the local engine, so wait 45 s.
     let settled = ''
     try {
-      await status.filter({ hasText: /^Reply complete\./ }).waitFor({ timeout: 30_000 })
-      settled = (await status.textContent()) ?? ''
+      await status.filter({ hasText: /^Reply complete\./ }).waitFor({ timeout: 45_000 })
+      settled = (await status.filter({ hasText: /^Reply complete\./ }).textContent()) ?? ''
     } catch {
-      settled = `timed out at "${(await status.textContent()) ?? ''}"`
+      settled = `did not settle; status lines: ${JSON.stringify((await page.getByRole('status').allTextContents()).filter(Boolean))}`
     }
     check(label, 'copilot streams over SSE and settles', settled.startsWith('Reply complete.'), settled.slice(0, 80))
 
