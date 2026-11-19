@@ -1,16 +1,257 @@
-# MicroCredit API
+# MicroCredit API + SentinelScout
 
 [![CI](https://github.com/l3n8n-ocd/microcredit-api/actions/workflows/ci.yml/badge.svg)](https://github.com/l3n8n-ocd/microcredit-api/actions/workflows/ci.yml)
 
-> Alternative Credit Scoring & Micro-Lending Portal
+> Loan disbursement flows that cannot pay a borrower twice, and an agent that checks security advisories against
+> them.
 
-**Live demo: [microcredit-api-beta.vercel.app](https://microcredit-api-beta.vercel.app)**.
-The demo opens on a pre-filled sample payout. Double-click **Disburse** and only one request is
-sent. Then use **Simulate
-double-click / network retry** to send the same request twice: the second one is
-replayed (same `Idempotency-Key`) or rejected with `409` (stale `If-Match`), and the
-ledger posts the payout once. The demo runs against an in-memory mock API, so
-state resets when you reload the page.
+## What it does, and for whom
+
+- **MicroCredit API** is a micro-lending demo for Filipino sari-sari store owners and market vendors.
+  - Every payout carries an `Idempotency-Key`, and every admin action sends an `If-Match` version.
+  - So a double-click, a network retry, or two admins clicking at once can't post a second payout.
+  - Money is integer centavos (`₱1.00 = 100`), posted to a double-entry ledger where `Σ debits === Σ credits`.
+  - A 10-state loan machine rejects illegal moves such as `REJECTED → DISBURSED` with a typed `409`.
+  - An AI underwriting copilot explains scores and ledger entries through 4-state tool cards.
+- **SentinelScout** is a triage agent for this repo. Given a GitHub Security Advisory ID, it uses 4 MCP tools:
+  1. fetches the advisory;
+  2. checks `package-lock.json`;
+  3. audits the centavo and `Idempotency-Key` / `If-Match` rules (with typecheck and tests);
+  4. writes a redacted brief for a person to sign off.
+
+  It makes at most 4 tool calls and never changes the repo.
+- **For:**
+  - Engineering Managers at seed-to-Series A lending startups who cannot afford a duplicate payout;
+  - security reviewers checking an agent's guardrails;
+  - fintech and AI teams evaluating idempotent `Centavos` payment flows, tool-calling UIs and vulnerability
+    triage agents.
+
+| Live | |
+| --- | --- |
+| App: double-click **Disburse** | https://microcredit-api-beta.vercel.app |
+| AI copilot | https://microcredit-api-beta.vercel.app/underwriting#copilot |
+| SentinelScout web runner | https://microcredit-api-beta.vercel.app/agent |
+| Portfolio | https://l3n8n-ocd.github.io/portfolio/ |
+| CI (every push) | https://github.com/l3n8n-ocd/microcredit-api/actions/workflows/ci.yml |
+
+The demo runs against an in-memory mock API in your browser tab, so state resets when you reload (or press **Reset
+demo**).
+
+## Quick start: from a fresh clone
+
+You need git and **Node.js 22.18 or newer**: SentinelScout imports TypeScript with Node's built-in type stripping, and
+`nvm use` reads `.nvmrc` (22). No API key is needed. Without one, the copilot uses a local rule engine and SentinelScout
+uses its deterministic rules planner.
+
+```bash
+git clone https://github.com/l3n8n-ocd/microcredit-api.git
+cd microcredit-api
+nvm use                      # or any Node 22.18+
+npm ci                       # exact versions from package-lock.json
+cp .env.example .env.local   # optional: placeholders keep every feature on the no-key path
+```
+
+```bash
+npm run typecheck            # tsc --noEmit, strict
+npm run lint                 # oxlint, warnings fail
+npm test                     # Vitest: 524 tests, including the 6 SentinelScout evals
+npm run agent:eval           # SentinelScout: the 6 FL-06 eval cases; exits 1 unless 6/6
+npm run agent:run            # SentinelScout: one real triage over MCP stdio
+npm run build                # next build
+npm run start                # http://localhost:3000
+```
+
+**Checked from a fresh clone on 2026-11-19 (Node 22.23.4).** Every command above exited 0:
+
+| Command | Result |
+| --- | --- |
+| `npm ci` | 29 s |
+| `npm test` | 524/524 in 14 s |
+| `npm run agent:eval` | 6/6 |
+| `npm run agent:run` | completed, 4 tool calls in 8.9 s |
+| `npm run build` | 10 s |
+
+**Browser tests** (optional) run after `npm run build`, with Chromium installed:
+
+```bash
+npx playwright install --with-deps chromium
+npm run test:e2e             # 18 checks: primary flow, keyboard-only flow, axe-core, /motion-lab, /3d-lab
+npm run test:e2e:fold        # 67 checks: above the fold, 375 px / 1280 px on every route, copilot streaming
+```
+
+**Optional environment variables** (`.env.local`; all server-only, never `NEXT_PUBLIC_`):
+
+| Variable | Turns on |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | The copilot answers with Claude (default `claude-opus-5-5`); `npm run agent:run -- --planner model` plans with it. |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | The same with Gemini (default `gemini-3.5-flash-lite`), if no Anthropic key is set. |
+| `ANTHROPIC_MODEL`, `GOOGLE_GENERATIVE_AI_MODEL` | Override the model IDs. |
+
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Start the Next.js dev server (App Router) |
+| `npm run build` / `npm run start` | Production build (`next build`) / serve it (`next start`) |
+| `npm run typecheck` | Run the TypeScript compiler in strict mode |
+| `npm run lint` | Run oxlint; warnings fail the run |
+| `npm test` | Run the Vitest suite once (524 tests) |
+| `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
+| `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
+| `npm run test:e2e` | After `build`: Playwright (`e2e/*.spec.ts`): the primary flow (Disburse replay, then the copilot with a tool card, mocked `/api/chat`), the FE-AA1 `/motion-lab` checks, the FE-AA2 `/3d-lab` checks and the FE-10 keyboard-only flow + axe-core scan |
+| `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes at 375px/1280px with no overflow, and the AI Copilot streaming checks |
+| `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 31 browser checks and the 4 Checkpoint 1 screenshots |
+| `npm run test:e2e:fe07` | After `build`: FE-07 tool cards, 14 browser checks and the 6 tool-state screenshots |
+
+Every commit runs lint-staged and a typecheck, and commit messages must follow Conventional Commits (`feat`, `fix`,
+`docs`, `chore`, `refactor`, `test`).
+
+## Usage examples
+
+**1. The double-payout guard (`/`).**
+1. Double-click **Disburse**: the request log shows one request, `201 Created · posted JE-0001`.
+2. Press **Reset demo**, then **Simulate double-click / network retry**. It sends the same payout twice with the same
+   `Idempotency-Key`. The second gets `201 Idempotent replay of JE-0001 · no new ledger entry`.
+3. Choose **Two admins (same If-Match)** instead: the second request carries a stale `If-Match` and gets `409`.
+
+The ledger table shows `Σ debits === Σ credits` after each step.
+
+**2. SentinelScout from the terminal.**
+
+```bash
+npm run agent:run                                         # default: GHSA-2464-fhr4-w9xw
+npm run agent:run -- --request "Triage GHSA-xxxx-xxxx-xxxx. notes: ..."
+npm run agent:run -- --planner model                      # needs ANTHROPIC_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY
+```
+
+From the fresh-clone run above (abridged):
+
+```text
+[START] triage T-20261119-01 · planner: FL-06 rules (no model)
+[TOOL RESULT] fetch_ghsa_advisory · 613 ms · ✓ source=osv advisories=1 GHSA-2464-fhr4-w9xw critical [next >=10.0.0 <15.5.28||>=16.0.0 <16.4.1]
+[GUARDRAIL CHECK] ✓ untrusted advisory text: Advisory text wrapped as untrusted data. No instruction-shaped text found.
+[TOOL RESULT] scan_local_repo_exposure · 11 ms · ✓ exposed=false next: 16.4.5 direct in_range=false (lockfile 383 pkgs)
+[TOOL RESULT] audit_centavos_and_idempotency · 8310 ms · ✓ verdict=PASS files=47 float_money_lines=0 Idempotency-Key=true If-Match=true checks=typecheck pass, tests pass
+[GUARDRAIL CHECK] ✓ output secret scan: No token, private IP, phone number or wallet signature in the brief.
+[FINAL ARTIFACT WRITTEN] docs/drafts/latest-triage-brief.md · verdict NOT_AFFECTED
+[DONE] 4 tool calls · 8941 ms · completed
+```
+
+**3. The AI copilot (`/underwriting#copilot`).**
+- Pick a starter such as **Two admins click Disburse**, or a tool chip such as **Run Trust Score Tool (Chart)**.
+- Enter sends. Tab lands on **Stop**, and Escape stops the reply.
+- A screen reader hears one status line ("Copilot is replying.", then "Reply complete." with the first sentence), not
+  every token.
+
+**4. SentinelScout on the web (`/agent`).** Press **Run End-to-End Agent Loop**. It is the same engine and tools,
+in-process, with each step streamed to the page.
+
+## Architecture
+
+```text
+ BROWSER ──────────────────────────────────────────────────────────────────────────────────────────
+  /  Disburse sandbox          /underwriting  AI copilot           /agent  SentinelScout runner
+  mock server in the tab:      chat, Stop, 4-state tool cards      live event stream
+  Idempotency-Key, If-Match,          │ POST /api/chat (SSE)               │ POST /api/agent (NDJSON)
+  10-state loans, ledger              │                                    │
+ NEXT.JS ROUTE HANDLERS ──────────────┼────────────────────────────────────┼──────────────────────────
+                                      ▼                                    ▼
+                         Claude / Gemini if a key is set,     src/lib/sentinel-scout/engine.ts
+                         else the local rule engine;          (one engine, two hosts)
+                         Zod tools in src/lib/ai/tools.ts            │ in-process calls
+ TERMINAL ───────────────────────────────────────────────────────────┼──────────────────────────────
+  npm run agent:run ─► agents/sentinel-scout/run-agent.mjs           │
+                         │ JSON-RPC tools/call over stdio            │
+                         ▼                                           ▼
+                mcp/microcredit-mcp-server.mjs ─────► src/lib/sentinel-scout/tools.ts
+                (owns the 4-call budget per triage)    ├ fetch_ghsa_advisory ─► GitHub Security Advisories API
+                                                       │                        → OSV.dev → cache → snapshot
+                                                       ├ scan_local_repo_exposure ─► package-lock.json
+                                                       ├ audit_centavos_and_idempotency ─► src/ + tsc + vitest
+                                                       └ write_sanitized_triage_brief ─► leak gate → docs/drafts/
+```
+
+Detail: [`docs/FL-07_BUILD_LOG.md`](./docs/FL-07_BUILD_LOG.md) §1 (agent), [`SPEC.md`](./SPEC.md) (routes),
+[`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) (chat).
+
+## SentinelScout: eval results and honest limitations
+
+**Evals: 6/6.** The six cases were written before the build ([FL-06 §4](./docs/FL-06_PERSONAL_AGENT_SPEC.md)) and run
+against the built agent by `npm run agent:eval`, and in CI via `npm test`. There is one eval set.
+
+| # | Case | Verdict | Result |
+| --- | --- | --- | --- |
+| 1 | Exposed direct dependency | `AFFECTED` | PASS |
+| 2 | Version outside the range | `NOT_AFFECTED` | PASS |
+| 3 | Secret-leak trap: JWT, private IP and phone number in the notes (blocker) | `AFFECTED`, brief redacted | PASS |
+| 4 | Prompt injection inside the advisory text (blocker) | `NOT_AFFECTED`, from the scan, not the injected text | PASS |
+| 5 | Floating-point money before release | `INVARIANT_FAIL` | PASS |
+| 6 | GitHub, OSV and cache all down | `NEEDS_HUMAN`, nothing invented | PASS |
+
+**Honest limitations:**
+- **Advisory source.** The GitHub Advisories API is called without a token. GitHub rate-limits unauthenticated calls,
+  and the build machine's proxy blocks it outright. The fallback chain is OSV.dev → local cache → a committed real
+  snapshot → a `NEEDS_HUMAN` brief.
+- **Proposals only.** The agent never edits `src/`, `package.json` or git, and never publishes. A fix is proposed as
+  text in the brief; a person applies it.
+- **Planner.** With no API key the deterministic rules planner runs, and that is what the evals test. The model planner
+  has only been run against a mock model, never a live one.
+- **The money audit is regex, not proof.** `amount * 1e2` passes it. An AST walk is next.
+- **The evals don't test the network.** They run in-process with synthetic `GHSA-fix0-…` fixtures and a stubbed check
+  runner, so they test the loop's decisions.
+- **The web runner does less.** `/agent` does not run typecheck or tests, and is rate-limited (6 runs a minute, 40 a
+  day).
+- **Time saved is not measured.** FL-06's ~15 min per triage is an estimate, not yet timed.
+- **The demo's ledger is in memory,** so "full-stack" stays off the headline.
+
+Full list: [`docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md`](./docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md) §2.
+
+## Transparency
+
+> **I built this with Claude Code, and here is what I checked myself.**
+>
+> Claude Code wrote most of the code, tests and documentation, in sessions I directed. I set the requirements, chose
+> between the options it laid out, and pushed every commit under my own name.
+>
+> **What checks it on every push** ([CI](./.github/workflows/ci.yml)):
+> - `typecheck`, `lint`;
+> - 524 Vitest tests, including the six SentinelScout evals;
+> - `next build`;
+> - 18 Playwright checks, including a keyboard-only run and axe-core on 5 routes;
+> - the 67-check fold script.
+>
+> Every number in the docs comes from a run and says how it was measured; where nothing measured it, the docs say TODO.
+> The checks I did by hand are listed in
+> [FL-09 §2.3](./docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md#23-transparency-diligence).
+
+## Master Deliverable Index
+
+| Deliverable | Where | Live |
+| --- | --- | --- |
+| Proof statement (Week 1) | [`docs/WHAT_ARE_YOU_PROVING.md`](./docs/WHAT_ARE_YOU_PROVING.md) | |
+| FL-01 · AI workflow audit | [`docs/FL-01_WORKFLOW_AUDIT.md`](./docs/FL-01_WORKFLOW_AUDIT.md) | |
+| FL-02 · Prompting fundamentals | [`docs/FL-02_PROMPTING_FUNDAMENTALS.md`](./docs/FL-02_PROMPTING_FUNDAMENTALS.md) | |
+| FE-03 / FE-04 · AI-assisted workflow drill | [`WORKFLOW.md`](./WORKFLOW.md) | |
+| FE-03 / FE-05 · Accessible components | [`playground/`](./playground/) · [`NOTES.md`](./NOTES.md) | [`/playground`](https://microcredit-api-beta.vercel.app/playground) |
+| FE-04 / FE-05 · Capstone skeleton | [`SPEC.md`](./SPEC.md) | [app](https://microcredit-api-beta.vercel.app) |
+| FL-04 · Automation workflow | [`docs/FL-04_AUTOMATION_WORKFLOW.md`](./docs/FL-04_AUTOMATION_WORKFLOW.md) | |
+| FL-05 · Agents and MCP | [`docs/FL-05_AGENTS_AND_MCP.md`](./docs/FL-05_AGENTS_AND_MCP.md) | |
+| FL-06 · Personal agent spec | [`docs/FL-06_PERSONAL_AGENT_SPEC.md`](./docs/FL-06_PERSONAL_AGENT_SPEC.md) | |
+| FL-07 · SentinelScout build | [`docs/FL-07_BUILD_LOG.md`](./docs/FL-07_BUILD_LOG.md) | [`/agent`](https://microcredit-api-beta.vercel.app/agent) |
+| FE-06 · Streaming AI chat | [`docs/FE-06_STREAMING_CHAT.md`](./docs/FE-06_STREAMING_CHAT.md) | [`/underwriting`](https://microcredit-api-beta.vercel.app/underwriting#copilot) |
+| FE-07 · Tool results in the UI | [`docs/FE-07_TOOL_UI.md`](./docs/FE-07_TOOL_UI.md) | [`/underwriting`](https://microcredit-api-beta.vercel.app/underwriting#copilot) |
+| FE-08 · Error and edge cases | [`docs/FE-08_ERROR_AND_EDGE_CASES.md`](./docs/FE-08_ERROR_AND_EDGE_CASES.md) | |
+| FE-09 · Testing pass | [`docs/FE-09_TESTING_PASS.md`](./docs/FE-09_TESTING_PASS.md) | [CI](https://github.com/l3n8n-ocd/microcredit-api/actions/workflows/ci.yml) |
+| FE-AA1 · Buttons with a brain | [`docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md`](./docs/FE-AA1_BUTTONS_WITH_A_BRAIN.md) | [`/motion-lab`](https://microcredit-api-beta.vercel.app/motion-lab) |
+| FE-AA2 · 3D on the web | [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md) | [`/3d-lab`](https://microcredit-api-beta.vercel.app/3d-lab) |
+| FE-10 · Accessibility and performance audit | [`AUDIT.md`](./AUDIT.md) | |
+| PF-04 · Portfolio live, DNS walkthrough | [`docs/PF-04_DNS_WALKTHROUGH.md`](./docs/PF-04_DNS_WALKTHROUGH.md) | [portfolio](https://l3n8n-ocd.github.io/portfolio/) |
+| Survive the Crit | [portfolio `SURVIVE_THE_CRIT.md`](https://github.com/l3n8n-ocd/portfolio/blob/main/docs/SURVIVE_THE_CRIT.md) | reviewer's words still to paste |
+| Break Your Own Site | [portfolio `BREAK_YOUR_OWN_SITE.md`](https://github.com/l3n8n-ocd/portfolio/blob/main/docs/BREAK_YOUR_OWN_SITE.md) | reviewer's words still to paste |
+| Send the Link | **Not found** in either repo (searched 2026-11-19). TODO: add the link. | |
+| FL-CAP · Keep the habit | [`docs/FL-CAP_KEEP_THE_HABIT.md`](./docs/FL-CAP_KEEP_THE_HABIT.md) | |
+| FL-09 / FL-10 · Show it, tell the story | [`docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md`](./docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md) | |
+
+Every assignment, with its evidence and numbers, is in the detailed log under
+[FlyRank Internship Deliverables](#-flyrank-internship-deliverables).
 
 ## Problem Statement
 
@@ -31,13 +272,13 @@ act on.
 | ---------- | -------------------------------------------------- |
 | UI         | React 19 (functional components, named exports)    |
 | Language   | TypeScript 7, `strict` plus the extra flags in [`CLAUDE.md`](./CLAUDE.md#2-tech-stack) |
-| Build      | Vite 8                                             |
-| Styling    | Tailwind CSS 4 (via `@tailwindcss/vite`)           |
+| Framework  | Next.js 16 App Router (`next build`); Vite 8 runs Vitest only |
+| Styling    | Tailwind CSS 4 (via `@tailwindcss/postcss`)        |
 | Lint       | oxlint: no `any`, no default exports, hooks rules  |
 | 3D         | `three` 0.187 on `/3d-lab` only, lazy-loaded (`next/dynamic`, `ssr: false`) |
-| Tests      | Vitest 5 + jsdom + Testing Library                 |
+| Tests      | Vitest 5 + jsdom + Testing Library; Playwright 1.63 + axe-core |
 | Git hooks  | husky + lint-staged + commitlint (Conventional Commits) |
-| CI         | GitHub Actions: typecheck → lint → test → build    |
+| CI         | GitHub Actions: typecheck → lint → test → build → Playwright e2e → fold check |
 | Runtime    | Node.js 22 LTS (pinned in `.nvmrc`)                |
 
 ## Project Status
@@ -132,36 +373,6 @@ illegal transitions fail at compile time where possible and at runtime otherwise
 | Partial writes (ledger posted, state not updated) | State transition and its journal entries commit in **one ACID database transaction**: all or nothing. |
 | Webhook replay from wallet provider    | Webhooks are verified by HMAC signature (secret from env vars) and de-duplicated by provider event ID. |
 | Double-click on "Disburse" / "Pay"     | Submit buttons are disabled while a request is in flight, and the idempotency key covers anything that still gets through. |
-
-## Getting Started
-
-Requires Node.js 22 LTS (`nvm use` reads `.nvmrc`).
-
-```bash
-git clone https://github.com/l3n8n-ocd/microcredit-api.git
-cd microcredit-api
-npm install
-cp .env.example .env
-npm run dev
-```
-
-| Script              | What it does                                         |
-| ------------------- | ---------------------------------------------------- |
-| `npm run dev`       | Start the Next.js dev server (App Router)            |
-| `npm run build`     | Production build (`next build`)                      |
-| `npm run start`     | Serve the production build locally (`next start`)    |
-| `npm run typecheck` | Run the TypeScript compiler in strict mode           |
-| `npm run lint`      | Run oxlint; warnings fail the run                    |
-| `npm test`          | Run the Vitest suite once (524 tests)                |
-| `npm run agent:run` | FL-07: run SentinelScout once over MCP stdio; writes `docs/drafts/latest-triage-brief.md` |
-| `npm run agent:eval` | FL-07: the 6 FL-06 eval cases; exits 1 unless 6/6 pass |
-| `npm run test:e2e:fe08` | After `build`: FE-08 sabotage drill, 31 browser checks and the 4 Checkpoint 1 screenshots |
-| `npm run test:e2e:fe07` | After `build`: FE-07 tool cards, 14 browser checks and the 6 tool-state screenshots |
-| `npm run test:e2e`  | After `build`: Playwright (`e2e/*.spec.ts`): the primary flow (Disburse replay, then the copilot with a tool card, mocked `/api/chat`), the FE-AA1 `/motion-lab` checks, the FE-AA2 `/3d-lab` checks and the FE-10 keyboard-only flow + axe-core scan |
-| `npm run test:e2e:fold` | After `build`: above-the-fold on `/`, all routes at 375px/1280px with no overflow, and the AI Copilot streaming checks |
-
-Every commit runs lint-staged and a typecheck, and commit messages must follow
-Conventional Commits (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`).
 
 ## Portfolio & AI Fluency Proof
 
@@ -504,6 +715,13 @@ Write-up: [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md).
     `AUDIT.md`.
   - `npm test` 524/524 (8 new); `npm run test:e2e` adds the keyboard-only flow and 5 axe scans
     (18/18).
+- **FL-09 / FL-10 · Show It, Tell the Story (Week 8 General AI Fluency):** [`docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md`](./docs/FL-09_FL-10_SHOW_IT_TELL_THE_STORY.md) · [capstone index image](./docs/assets/curated/fl-09-fl-10-capstone-index.png)
+  - **A README a stranger can follow:** what it does and for whom, setup from a fresh clone, usage, an architecture
+    sketch, SentinelScout's 6/6 evals, honest limitations and a transparency note.
+  - **Reproduced on 2026-11-19:** a fresh `git clone` ran every setup command with exit 0. Tests were 524/524,
+    `agent:eval` 6/6, and `agent:run` completed in 4 tool calls.
+  - **A retrospective to Week-1 me (713 words)**, a 4-minute live demo runbook, and the master deliverable index.
+    The runbook was checked step by step on the live site: Simulate needs **Reset demo** after a real payout.
 
 ## License
 
