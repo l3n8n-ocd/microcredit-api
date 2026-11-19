@@ -77,7 +77,7 @@ cp .env.example .env.local   # optional: placeholders keep every feature on the 
 ```bash
 npm run typecheck            # tsc --noEmit, strict
 npm run lint                 # oxlint, warnings fail
-npm test                     # Vitest: 556 tests, including the 6 SentinelScout evals
+npm test                     # Vitest: 558 tests, including the 6 SentinelScout evals
 npm run agent:eval           # SentinelScout: the 6 FL-06 eval cases; exits 1 unless 6/6
 npm run agent:run            # SentinelScout: one real triage over MCP stdio
 npm run build                # next build
@@ -233,7 +233,7 @@ Detail: [`docs/FL-07_BUILD_LOG.md`](./docs/FL-07_BUILD_LOG.md) §1 (agent), [`SP
 | Per-client rate limit, checked before the body is read | 20 per 60 s on every request (`CHAT_RATE_LIMIT_*`); then 10 a minute and 100 a day on paid-model requests | 6 a minute, 40 a day |
 | Body | 32 KB, else `413` | 4 KB, else `413` |
 | Content | at most 24 messages; 2,000 characters per user turn, 4,000 per echoed assistant turn; else `400` | `request` at most 600 characters, else `400` |
-| Time budgets inside the 30 s | the model must start within 15 s, else a labelled local-engine fallback; a reply still streaming at 27 s ends as "[Ended early: time-limit]", text kept | model planner 24 s, each advisory fetch 5 s, else a `halt` event |
+| Time budgets inside the 30 s | the model must start within 15 s, else a labelled local-engine fallback (unpaced if it starts after 18 s, so it ends inside 30 s); a reply still streaming at 27 s ends as "[Ended early: time-limit]", text kept | model planner 24 s, each advisory fetch 5 s, else a `halt` event |
 | A refusal looks like | `{ "error": "…", "code": "RATE_LIMITED", "retryAfterSeconds": 42 }` plus `Retry-After: 42` | the same shape |
 
 The limiter is in memory, so each Vercel instance counts on its own. It slows a script down; the provider's monthly
@@ -279,7 +279,7 @@ I built this with Claude Code. Below is the split, with the file that shows each
 **What Claude Code generated,** in sessions I directed:
 - most of the code: the React components, the route handlers (`src/app/api/chat/route.ts`,
   `src/app/api/agent/route.ts`), the local rule engine, and SentinelScout's engine and MCP server;
-- most of the tests: the 556 Vitest tests, the Playwright specs and the browser scripts in `e2e/`;
+- most of the tests: the 558 Vitest tests, the Playwright specs and the browser scripts in `e2e/`;
 - the first drafts of the docs, this README included.
 
 **What I set before the code was written,** the rules the AI had to work inside:
@@ -314,7 +314,7 @@ A box is ticked only after I do it, and nothing unticked is claimed here.
 
 **What a machine checks on every push** ([CI](./.github/workflows/ci.yml)):
 - typecheck and lint;
-- 556 Vitest tests, including the six SentinelScout evals;
+- 558 Vitest tests, including the six SentinelScout evals;
 - `next build`;
 - 23 Playwright checks, including a keyboard-only run and axe-core on 6 routes;
 - the 69-check fold script.
@@ -843,7 +843,7 @@ Write-up: [`docs/FE-AA2_3D_EXPERIENCE.md`](./docs/FE-AA2_3D_EXPERIENCE.md).
     (model 27 s / 24 s, fetch 5 s).
   - **Caps:** a 32 KB body (`413`), 24 messages, 2,000 / 4,000 characters per turn (`400`), and a per-client
     limit checked before the body is read (`429` + `Retry-After`). Refusals are `{ error, code }` with no stack.
-  - **Measured:** `npm test` 556/556 (23 new, each guard mutation-checked); Playwright 23/23, fold 69/69,
+  - **Measured:** `npm test` 558/558 (25 new, each guard mutation-checked); Playwright 23/23, fold 69/69,
     FE-08 31/31 and FE-07 14/14, all under the new limit with no test-only override.
   - **Cross-browser:** 27/27 on Chromium 153, Firefox 155, WebKit 26.6 and WebKit as an iPhone at 375×812. The
     iPhone run measured 17 form controls at 16 px. WebKit is Safari's engine, not Apple's Safari app: a real

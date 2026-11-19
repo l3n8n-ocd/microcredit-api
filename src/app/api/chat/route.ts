@@ -57,6 +57,8 @@ import { apiError, readJsonBody } from '../../../lib/http/request-guard.ts'
 import {
   MAX_MODEL_STEPS,
   MODEL_CONFIG,
+  fallbackPacing,
+  type LocalPacing,
   UNDERWRITING_TOOLS,
   buildSystemPrompt,
   describeEngine,
@@ -85,22 +87,23 @@ const SSE_HEADERS = {
 } as const
 
 /** FE-07: the local tool runner's pacing, from MODEL_CONFIG so tests can speed it up. */
-function toolTiming(): ToolTiming {
-  return { deltaMs: MODEL_CONFIG.localToolDeltaMs, executeMs: MODEL_CONFIG.localToolExecuteMs, tokenMs: MODEL_CONFIG.localTokenDelayMs }
+function toolTiming(pacing: LocalPacing = fallbackPacing(0, MODEL_CONFIG)): ToolTiming {
+  return { deltaMs: pacing.toolDeltaMs, executeMs: pacing.toolExecuteMs, tokenMs: pacing.tokenDelayMs }
 }
 
-async function streamFromLocalEngine(messages: readonly WireMessage[], signal: AbortSignal, send: Send): Promise<void> {
+/** `pacing` defaults to the normal pace; FE-11 passes no pacing for a late hand-over (see `fallbackPacing`). */
+async function streamFromLocalEngine(messages: readonly WireMessage[], signal: AbortSignal, send: Send, pacing: LocalPacing = fallbackPacing(0, MODEL_CONFIG)): Promise<void> {
   // FE-07: a request that names a tool gets a real tool call (validate → execute → card), then a summary.
   const plan = planLocalTool(messages)
   if (plan !== null) {
-    await streamLocalToolCall(plan, signal, send, toolTiming())
+    await streamLocalToolCall(plan, signal, send, toolTiming(pacing))
     if (!signal.aborted) send({ type: 'done', finishReason: 'stop' })
     return
   }
   const tokens = streamLocalReply(messages, {
     signal,
-    tokenDelayMs: MODEL_CONFIG.localTokenDelayMs,
-    firstTokenDelayMs: MODEL_CONFIG.localFirstTokenDelayMs,
+    tokenDelayMs: pacing.tokenDelayMs,
+    firstTokenDelayMs: pacing.firstTokenDelayMs,
   })
   for await (const text of tokens) send({ type: 'token', text })
   if (!signal.aborted) send({ type: 'done', finishReason: 'stop' })
@@ -338,6 +341,7 @@ export function GET(): Response {
 }
 
 export async function POST(req: Request): Promise<Response> {
+  const requestStartedAt = Date.now()
   // 0. FE-11: the per-client limit comes first, so an over-limit client costs one Map lookup, not a body read.
   const allowed = chatRequestLimiter.check(clientKey(req.headers))
   if (!allowed.ok) {
@@ -471,7 +475,8 @@ export async function POST(req: Request): Promise<Response> {
                 ? 'model call failed'
                 : `model call failed: HTTP ${status}`
           send({ type: 'meta', engine: { kind: 'local', label: `local rule engine (${reason})` } })
-          await streamFromLocalEngine(messages, abort.signal, send)
+          // FE-11: a late hand-over streams unpaced, so it ends inside the 30 s maxDuration.
+          await streamFromLocalEngine(messages, abort.signal, send, fallbackPacing(Date.now() - requestStartedAt, MODEL_CONFIG))
         }
       } catch {
         if (!abort.signal.aborted) send({ type: 'error', message: 'The copilot could not produce a reply.' })

@@ -26,7 +26,13 @@ import {
 vi.mock('server-only', () => ({}))
 
 /** The engine the route will use. `null` means "resolve from env like production does". */
-const injected = vi.hoisted(() => ({ engine: null as unknown, timeout: null as null | { firstChunkMs: number; chunkMs: number; totalMs: number } }))
+const injected = vi.hoisted(() => ({
+  engine: null as unknown,
+  timeout: null as null | { firstChunkMs: number; chunkMs: number; totalMs: number },
+  /** FE-11: pacing overrides for the late-fallback test. */
+  tokenDelayMs: null as null | number,
+  unpacedFallbackAfterMs: null as null | number,
+}))
 
 vi.mock('../underwriting-model.ts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../underwriting-model.ts')>()
@@ -35,8 +41,13 @@ vi.mock('../underwriting-model.ts', async (importOriginal) => {
     // Same engine, without 22 ms between tokens: a full reply streams in milliseconds.
     MODEL_CONFIG: {
       ...actual.MODEL_CONFIG,
-      localTokenDelayMs: 2,
+      get localTokenDelayMs() {
+        return injected.tokenDelayMs ?? 2
+      },
       localFirstTokenDelayMs: 0,
+      get unpacedFallbackAfterMs() {
+        return injected.unpacedFallbackAfterMs ?? actual.MODEL_CONFIG.unpacedFallbackAfterMs
+      },
       // Production timeouts unless a test asks for short ones.
       get modelTimeout() {
         return injected.timeout ?? actual.MODEL_CONFIG.modelTimeout
@@ -59,6 +70,8 @@ beforeEach(() => {
 afterEach(() => {
   injected.engine = null
   injected.timeout = null
+  injected.tokenDelayMs = null
+  injected.unpacedFallbackAfterMs = null
   chatRateLimiter.reset()
   // FE-11: the general per-client limit is per server instance too; each test starts with an empty log.
   chatRequestLimiter.reset()
@@ -408,6 +421,44 @@ describe('POST /api/chat — a hosted model that goes quiet', () => {
     expect(events.at(-1)).toEqual({ type: 'done', finishReason: 'time-limit' })
     // No hand-over to the local engine: the partial answer is the model's and stays labelled as such.
     expect(events.filter((event) => event.type === 'meta')).toHaveLength(1)
+  })
+
+  it('FE-11: a late hand-over to the local engine streams unpaced, so it ends inside maxDuration', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    injected.timeout = { firstChunkMs: 5_000, chunkMs: 5_000, totalMs: 200 }
+    // 200 ms between tokens: paced, even the short "No." reply would take seconds.
+    injected.tokenDelayMs = 200
+    injected.unpacedFallbackAfterMs = 100
+    let timer: ReturnType<typeof setInterval> | undefined
+    injected.engine = {
+      kind: 'google',
+      label: 'mock-model',
+      reasoning: 'low',
+      // Thinks until the budget runs out: the path that hands over late (about 27 s in production).
+      model: new MockLanguageModelV4({
+        doStream: async () => ({
+          stream: new ReadableStream<StreamPart>({
+            start(controller) {
+              controller.enqueue({ type: 'stream-start', warnings: [] })
+              controller.enqueue({ type: 'reasoning-start', id: 'r1' })
+              timer = setInterval(() => controller.enqueue({ type: 'reasoning-delta', id: 'r1', delta: 'hmm ' }), 20)
+            },
+            cancel() {
+              clearInterval(timer)
+            },
+          }),
+        }),
+      }),
+    }
+
+    const startedAt = Date.now()
+    const events = await readEvents(await POST(chatRequest(ask('Can a REJECTED loan be DISBURSED?'))))
+    clearInterval(timer)
+    const tokens = events.filter((event) => event.type === 'token').length
+    expect(tokens).toBeGreaterThan(5)
+    expect(events.at(-1)).toEqual({ type: 'done', finishReason: 'stop' })
+    // Unpaced: well under the paced time of tokens × 200 ms.
+    expect(Date.now() - startedAt).toBeLessThan(200 + (tokens * 200) / 2)
   })
 
   it('passes the engine reasoning effort to the model call', async () => {

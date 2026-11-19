@@ -12,7 +12,8 @@ import { CHAT_LIMITS, type WireMessage } from '../../../features/ai-copilot/chat
 import { toWireHistory } from '../../../features/ai-copilot/chatReducer.ts'
 import type { ChatMessage } from '../../../features/ai-copilot/chatTypes.ts'
 import { DEFAULT_REQUEST_LIMIT, chatRateLimiter, chatRequestLimiter, createRateLimiter, requestRateLimitRule } from '../../../lib/ai/rate-limit.ts'
-import { MODEL_CONFIG } from '../../../lib/ai/underwriting-model.ts'
+import { streamLocalReply } from '../../../lib/ai/local-engine.ts'
+import { MODEL_CONFIG, STARTER_PROMPTS, fallbackPacing } from '../../../lib/ai/underwriting-model.ts'
 import { MAX_JSON_BODY_BYTES, readJsonBody } from '../../../lib/http/request-guard.ts'
 import { AGENT_LIMITS, MAX_REQUEST_CHARS } from '../../../lib/sentinel-scout/protocol.ts'
 import * as agentRoute from '../agent/route.ts'
@@ -85,6 +86,26 @@ describe('maxDuration: an explicit 30 s ceiling, with every inner budget under i
     expect(MODEL_CONFIG.modelTimeout.totalMs).toBeLessThan(ceilingMs)
     expect(MODEL_CONFIG.modelTimeout.firstChunkMs).toBeLessThan(MODEL_CONFIG.modelTimeout.totalMs)
     expect(MODEL_CONFIG.modelFirstResponseMs).toBeLessThan(MODEL_CONFIG.modelTimeout.totalMs)
+  })
+
+  it('paces a local hand-over only when it starts early enough to finish inside the ceiling', async () => {
+    // The usual hand-over (no model output for 15 s) keeps the normal pace…
+    expect(fallbackPacing(MODEL_CONFIG.modelFirstResponseMs).tokenDelayMs).toBe(MODEL_CONFIG.localTokenDelayMs)
+    // …a hand-over after the 27 s budget streams with no pauses at all.
+    expect(fallbackPacing(MODEL_CONFIG.modelTimeout.totalMs)).toEqual({ tokenDelayMs: 0, firstTokenDelayMs: 0, toolDeltaMs: 0, toolExecuteMs: 0 })
+
+    // The longest local reply, paced, started at the last paced moment, still ends inside maxDuration.
+    let longest = 0
+    for (const starter of STARTER_PROMPTS) {
+      let tokens = 0
+      for await (const token of streamLocalReply([{ role: 'user', content: starter.prompt }], { signal: new AbortController().signal, tokenDelayMs: 0, firstTokenDelayMs: 0 })) {
+        if (token !== '') tokens += 1
+      }
+      longest = Math.max(longest, tokens)
+    }
+    expect(longest).toBeGreaterThan(50)
+    const pacedEnd = MODEL_CONFIG.unpacedFallbackAfterMs + MODEL_CONFIG.localFirstTokenDelayMs + longest * MODEL_CONFIG.localTokenDelayMs
+    expect(pacedEnd).toBeLessThan(chatRoute.maxDuration * 1000 - 2_000)
   })
 
   it('gives the agent model planner and its fetches budgets under the ceiling', () => {

@@ -103,7 +103,32 @@ export const MODEL_CONFIG = {
   localToolDeltaMs: 40,
   /** FE-07 local tool calls: how long `input-available` ("running on the server") stays on screen. */
   localToolExecuteMs: 600,
+  /**
+   * FE-11: a hand-over to the local engine that starts later than this (ms after the request arrived)
+   * streams with no pacing. A paced long reply takes about 6 s (254 tokens × 22 ms, measured live), so a
+   * hand-over at 27 s would end past the 30 s `maxDuration` and Vercel would cut it. The usual 15 s
+   * no-response hand-over stays paced and ends around 22 s.
+   */
+  unpacedFallbackAfterMs: 18_000,
 } as const
+
+export interface LocalPacing {
+  readonly tokenDelayMs: number
+  readonly firstTokenDelayMs: number
+  readonly toolDeltaMs: number
+  readonly toolExecuteMs: number
+}
+
+/** FE-11: the local engine's pacing for a reply that starts `elapsedMs` into the request. */
+export function fallbackPacing(elapsedMs: number, config: Pick<typeof MODEL_CONFIG, 'unpacedFallbackAfterMs' | 'localTokenDelayMs' | 'localFirstTokenDelayMs' | 'localToolDeltaMs' | 'localToolExecuteMs'> = MODEL_CONFIG): LocalPacing {
+  if (elapsedMs >= config.unpacedFallbackAfterMs) return { tokenDelayMs: 0, firstTokenDelayMs: 0, toolDeltaMs: 0, toolExecuteMs: 0 }
+  return {
+    tokenDelayMs: config.localTokenDelayMs,
+    firstTokenDelayMs: config.localFirstTokenDelayMs,
+    toolDeltaMs: config.localToolDeltaMs,
+    toolExecuteMs: config.localToolExecuteMs,
+  }
+}
 
 // ── 2. Starter prompts ──────────────────────────────────────────────────────
 

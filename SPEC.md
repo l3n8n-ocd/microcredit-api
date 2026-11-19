@@ -38,7 +38,7 @@ Server Components by default; `'use client'` only on interactive leaves.
 
 - **Domain stays framework-free.** All business logic lives in `src/features/` (`disbursement`,
   `scoring`, `health`) and `src/utils/`, imported by both Server and Client components. The suite is
-  556 tests: 256 on the domain and UI; 24 on the FE-AA1 SmartActionButton and `/motion-lab` workbench; 19 on the FE-AA2 3D lab; 9 on the FE-AA3 shader hero; 22 on the FE-11 route limits and caps; 8 on the FE-10 accessibility fixes; 151 on the FE-06 chat, its FE-07 tools and cards, its FE-08 sabotage
+  558 tests: 256 on the domain and UI; 24 on the FE-AA1 SmartActionButton and `/motion-lab` workbench; 19 on the FE-AA2 3D lab; 9 on the FE-AA3 shader hero; 23 on the FE-11 route limits and caps; 8 on the FE-10 accessibility fixes; 152 on the FE-06 chat, its FE-07 tools and cards, its FE-08 sabotage
   drills, its rate limiter and its env handling (`src/features/ai-copilot/`, `src/lib/ai/`, `src/utils/env.ts`);
   12 in the FE-09 testing pass (`src/features/__tests__/`); 40 keyboard tests on the FE-03 / FE-05 components
   in `playground/`; and 15 on the FL-07 SentinelScout agent in `agents/`.
@@ -93,7 +93,7 @@ same functions, and FE-07 tools will replace that snapshot (`CLAUDE.md` §9.2 ru
 
 ## Testing
 
-- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 556 tests),
+- `npm run typecheck` (tsc strict), `npm run lint` (oxlint), `npm test` (Vitest, 558 tests),
   `npm run build` (next build), `npm run test:e2e` (Playwright: above-the-fold on `/` under the
   worst-case fallback font, all 5 routes at 375px and 1280px with zero horizontal overflow, and 14 AI
   Copilot checks per width against the real `/api/chat`: token-by-token streaming, Stop, server-confirmed

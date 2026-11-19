@@ -75,7 +75,7 @@ that `error` holds no stack frame, `Error:` or file path.
 
 ### Evidence
 
-- **Vitest:** 556/556, including 22 new tests in `fe11-production-hygiene.test.ts` (plus the `time-limit` case in §2.1), which cover:
+- **Vitest:** 558/558, including 23 new tests in `fe11-production-hygiene.test.ts` (plus 2 route cases from §2.1), which cover:
   - `maxDuration === 30` on both routes, and every inner budget under it;
   - `413` from a declared length, from a streamed body, and at exactly 32 KB + 1 byte;
   - `400` codes for each cap;
@@ -134,6 +134,24 @@ Checked on 2026-11-19 against `https://microcredit-api-beta.vercel.app` once `GE
   - a real provider failure mid-stream still gets the error card.
 - **Tests.** The `chatRoute.test.ts` case "ends a reply our time budget cut mid-stream" failed before the fix and
   passes after it.
+- **A second gap, found by running it again.** In 10 more live runs:
+  - two showed the labelled 15 s hand-over to the local engine, which finished at about 22 s;
+  - one showed the new `[Ended early: time-limit]`;
+  - six finished normally;
+  - one earlier run ended in "[Reply failed]" after 47 s.
+
+  The timings explain the failure:
+  - a model that sends *reasoning* parts clears the 15 s first-response watchdog;
+  - if it then thinks until the 27 s budget, the hand-over to the local engine starts at about 27 s;
+  - a paced long local reply takes about 6 s (254 tokens × 22 ms, measured on live);
+  - so it would end near 33 s, past the 30 s `maxDuration`, and Vercel cuts the stream.
+- **Second fix.**
+  - `fallbackPacing()` in `src/lib/ai/underwriting-model.ts` takes the time already spent: a hand-over after
+    18 s streams with no pauses, and an earlier one keeps the normal pace.
+  - The test in `fe11-production-hygiene.test.ts` measures the longest local reply across the starter prompts and
+    asserts that a paced reply starting at 18 s still ends at least 2 s inside the 30 s ceiling.
+  - The `chatRoute.test.ts` case "a late hand-over … streams unpaced" fails (5 s) when the route is wired back to
+    the normal pace.
 - **Trade-off.** 30 s stays, as the brief asked. The cost is that a slow model can now end a long answer early,
   and say so. Raising `maxDuration` back to 60 would let long answers finish; that is Lenon's call.
 
@@ -209,7 +227,7 @@ in CLAUDE.md §7. That is why the FE-10 performance work shipped as `fix(fe-10)`
 | --- | --- |
 | `npm run typecheck` | exit 0 |
 | `npm run lint` | exit 0 |
-| `npm test` | 556/556 |
+| `npm test` | 558/558 |
 | `npm run build` | exit 0; `/api/chat` and `/api/agent` are dynamic (`ƒ`) |
 | `npm run test:e2e` | 23/23 |
 | `npm run test:e2e:fold` | 69/69 |
