@@ -346,6 +346,7 @@ The Firefox and WebKit matrix runs on demand (`npm run test:e2e:browsers`), not 
 | Ship It · Frontend AI Engineering Capstone | [`docs/SHIP_IT_CAPSTONE.md`](./docs/SHIP_IT_CAPSTONE.md) · [summary image](./docs/assets/curated/ship-it-capstone-summary.png) | [app](https://microcredit-api-beta.vercel.app) · [`/underwriting`](https://microcredit-api-beta.vercel.app/underwriting) |
 | FE-10 · Accessibility and performance audit | [`AUDIT.md`](./AUDIT.md) | |
 | PF-04 · Portfolio live, DNS walkthrough | [`docs/PF-04_DNS_WALKTHROUGH.md`](./docs/PF-04_DNS_WALKTHROUGH.md) | [portfolio](https://l3n8n-ocd.github.io/portfolio/) |
+| Plant Your Flag · Domain + badge | [`docs/PLANT_YOUR_FLAG.md`](./docs/PLANT_YOUR_FLAG.md) (synced from the portfolio) | [portfolio footer](https://l3n8n-ocd.github.io/portfolio/) · [FlyRank credential](https://internship.flyrank.ai/verify?id=FR-D11-7F2E2-34A8A&first_name=Lenon) |
 | Survive the Crit | [portfolio `SURVIVE_THE_CRIT.md`](https://github.com/l3n8n-ocd/portfolio/blob/main/docs/SURVIVE_THE_CRIT.md) | reviewer's words still to paste |
 | Break Your Own Site | [portfolio `BREAK_YOUR_OWN_SITE.md`](https://github.com/l3n8n-ocd/portfolio/blob/main/docs/BREAK_YOUR_OWN_SITE.md) | reviewer's words still to paste |
 | Send the Link | **Not found** in either repo (searched 2026-11-19). TODO: add the link. | |
