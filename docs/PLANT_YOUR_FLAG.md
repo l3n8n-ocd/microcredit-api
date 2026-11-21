@@ -84,19 +84,27 @@ not "Active": the page can check the first, but only the dashboard shows the sec
 - D11 · Certificate of Completion, recipient Lenon Adriano, track Front-end AI Engineering, cohort July 2026.
 - Internship July 1 to November 21, 2026; issued November 21, 2026.
 
-**The badge in the footer:**
-- [`FlyRankBadge.tsx`](https://github.com/l3n8n-ocd/portfolio/blob/main/src/components/FlyRankBadge.tsx) draws it: a 164×164 `#051F21` circle with `#54E399`
-  rings and text, reading "FlyRank · AI Internship · Verified · Front-end AI Engineering · July 2026 Cohort ·
-  FR-D11-7F2E2-34A8A".
-- The SVG attributes are JSX camelCase (`strokeWidth`, `textAnchor`, `fontFamily`, `fontSize`, `fontWeight`,
+**The badge in the footer is FlyRank's own embed.**
+- [`FlyRankBadge.tsx`](https://github.com/l3n8n-ocd/portfolio/blob/main/src/components/FlyRankBadge.tsx) holds FlyRank's `<a>` + `<svg>` markup as Lenon
+  supplied it, inline styles included.
+- The design: a 164×164 `#051F21` circle. "FLYRANK AI INTERNSHIP" runs along the top arc and
+  `FR-D11-7F2E2-34A8A` in `#54E399` along the bottom arc, both via `<textPath>`. FlyRank's mark sits above
+  "Verified · Front-end AI Engineering".
+- The attributes are JSX camelCase (`strokeWidth`, `textAnchor`, `fontFamily`, `fontSize`, `fontWeight`,
   `letterSpacing`). A strict `tsc --noEmit` of the three new files passes.
-- **It is built from the brief's spec, not copied from an official file.** FlyRank's public verifier publishes
-  no badge artwork. To use FlyRank's own SVG, replace the `<svg>` in that one file.
-- Badge and caption form **one link** to the verify URL, with `target="_blank"` and `rel="noopener noreferrer"`.
-  - The link is named `Verify Lenon Adriano's FlyRank AI Internship credential`, and the SVG is `aria-hidden`.
-  - The caption shows the cohort, the credential ID and "Verify Credential ↗".
-- It is an outline link, not a filled button, so "Book a 15-min walkthrough" stays the page's one primary
-  button (CLAUDE.md §2).
+- **The badge is its own link** to the verify URL, with `target="_blank"` and `rel="noopener noreferrer"`. It is
+  named `Verify Lenon Adriano's FlyRank AI Internship credential FR-D11-7F2E2-34A8A`.
+- **The caption beside it carries a second link,** "Verify Credential ↗", to the same verifier. A link cannot sit
+  inside another link, so the two stay side by side.
+  - The caption also shows the track, the cohort and the credential ID.
+  - It is an outline link, not a filled button, so "Book a 15-min walkthrough" stays the page's one primary
+    button (CLAUDE.md §2).
+- **One accessibility note on FlyRank's markup.** axe-core reports `label-content-name-mismatch` (WCAG 2.5.3,
+  label in name) on the badge link.
+  - Its `aria-label` does not contain the words it shows ("Verified", "Front-end AI Engineering"), so a
+    voice-control user saying "click Verified" may miss it.
+  - The markup is kept verbatim. The "Verify Credential ↗" link next to it has a matching visible name.
+  - Worth raising with FlyRank.
 
 Proof: [`flag-01-footer-verified-badge.png`](https://github.com/l3n8n-ocd/portfolio/blob/main/docs/assets/launch-audit/flag-01-footer-verified-badge.png). It was
 captured on the live site at 1280 px and 2x; the badge measures 164×164 CSS px.
@@ -128,7 +136,7 @@ All three screenshots were taken on the live site (§6).
 | --- | --- | --- |
 | Edit `src/App.tsx` and `src/components/Footer.tsx` | `src/App.jsx` mounts a new `src/components/Footer.tsx` | Neither file existed. The footer was inline in `App.jsx`. |
 | `public/favicon.svg` | Created; `favicon.jpg` kept as the alternate | Only the JPG existed. |
-| "Install my exact official badge verbatim" | Built from the spec, swappable in one file | No official SVG was provided, and the verifier publishes none. |
+| "Install my exact official badge verbatim" | FlyRank's markup, as supplied by Lenon | The first build drew the badge from the spec, because no SVG was supplied yet. It was replaced once Lenon pasted FlyRank's own markup. |
 | Footer: `Analytics: Active · Cookie-Free · TLS 1.3 HTTPS` | `Analytics: GoatCounter loaded · Cookie-free (0 cookies) · HTTPS` | Each word is read live. A page cannot read its TLS version, so TLS 1.3 is recorded in §1. "Active" waits for the GoatCounter site to exist (§2). |
 | "visitor hits … tracked" by `sessionStorage` / `localStorage` | Labelled "stored in your browser only" | Browser storage can only count this visitor on this device. Site-wide counts are GoatCounter's job. |
 
@@ -143,10 +151,9 @@ against `https://l3n8n-ocd.github.io/portfolio/`:
 | `favicon.svg` | `200` |
 | Footer readout | `Analytics: GoatCounter loaded · Cookie-free (0 cookies) · HTTPS` |
 | GoatCounter requests | `200 https://gc.zgo.at/count.js`, `400 https://lenonadriano.goatcounter.com/count` (site not created yet) |
-| Badge link | `https://internship.flyrank.ai/verify?id=FR-D11-7F2E2-34A8A&first_name=Lenon`, `target="_blank"`, `rel="noopener noreferrer"`, 164×164 |
+| Badge link | `https://internship.flyrank.ai/verify?id=FR-D11-7F2E2-34A8A&first_name=Lenon`, `target="_blank"`, `rel="noopener noreferrer"`, 164×164, FlyRank's embed |
 | 375×812 | 0 px horizontal overflow |
 
 **Still open (Lenon):**
 1. Create the GoatCounter site `lenonadriano` (§2), then reload the live page and watch the dashboard.
 2. Confirm TLS 1.3 in Chrome DevTools → Security on your own machine (§1).
-3. If FlyRank gives you its own badge SVG, paste it into `FlyRankBadge.tsx` (§3).
